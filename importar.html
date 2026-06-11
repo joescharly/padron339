@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Importar Padrón — PDF Directo</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<!-- PDF.js para leer PDFs directamente -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  background:#0d1117;color:#e6e9f0;min-height:100vh;padding:16px}
+h1{font-size:20px;font-weight:800;margin-bottom:4px}
+p{font-size:13px;color:#7a84a0;line-height:1.6;margin-bottom:12px}
+.card{background:#161b27;border:1px solid #2a3147;border-radius:12px;
+  padding:18px;margin-bottom:14px}
+.card h2{font-size:14px;font-weight:800;margin-bottom:12px;
+  text-transform:uppercase;letter-spacing:.06em;color:#7a84a0}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.07em;color:#7a84a0;margin-bottom:5px}
+.field input{width:100%;background:#1e2436;border:1px solid #2a3147;border-radius:8px;
+  padding:10px 13px;color:#e6e9f0;font-size:14px;outline:none}
+.field input:focus{border-color:#3d7eff}
+.btn{display:inline-flex;align-items:center;gap:6px;border:none;border-radius:8px;
+  padding:12px 18px;font-size:14px;font-weight:700;cursor:pointer;
+  transition:filter .15s;font-family:inherit;width:100%;justify-content:center;margin-bottom:8px}
+.btn:hover{filter:brightness(1.1)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-blue{background:#3d7eff;color:#fff}
+.btn-green{background:#3ecf70;color:#051a0c}
+.btn-red{background:#e05555;color:#fff}
+.upload-zone{
+  background:#1e2436;border:2px dashed #2a3147;border-radius:12px;
+  padding:32px 20px;text-align:center;cursor:pointer;transition:border-color .2s;
+  margin-bottom:12px;
+}
+.upload-zone:hover,.upload-zone.drag{border-color:#3d7eff}
+.upload-zone .icon{font-size:40px;margin-bottom:10px}
+.upload-zone p{font-size:14px;color:#7a84a0;margin:0}
+.upload-zone input{display:none}
+.file-list{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.file-item{
+  background:#1e2436;border:1px solid #2a3147;border-radius:8px;
+  padding:10px 12px;display:flex;align-items:center;gap:10px;
+}
+.file-item .name{flex:1;font-size:13px;font-weight:600}
+.file-item .status{font-size:12px;padding:3px 8px;border-radius:20px;font-weight:700}
+.status-wait{background:rgba(122,132,160,.15);color:#7a84a0}
+.status-reading{background:rgba(61,126,255,.15);color:#3d7eff}
+.status-ok{background:rgba(62,207,112,.15);color:#3ecf70}
+.status-err{background:rgba(224,85,85,.15);color:#e05555}
+.progress-outer{background:#1e2436;border-radius:30px;height:10px;overflow:hidden;margin:8px 0}
+.progress-inner{height:100%;border-radius:30px;background:#3d7eff;width:0;transition:width .3s}
+.log{background:#0d1117;border:1px solid #2a3147;border-radius:8px;
+  padding:12px;font-size:11px;font-family:monospace;white-space:pre-wrap;
+  max-height:180px;overflow-y:auto;color:#3ecf70;min-height:50px}
+.stat-row{display:flex;gap:10px;margin-bottom:12px}
+.stat{flex:1;background:#1e2436;border-radius:8px;padding:12px;text-align:center}
+.stat .val{font-size:24px;font-weight:800;color:#3d7eff}
+.stat .lbl{font-size:11px;color:#7a84a0;margin-top:3px}
+.alert{border-radius:8px;padding:12px;font-size:13px;margin-bottom:12px;line-height:1.6}
+.alert-ok{background:rgba(62,207,112,.1);border:1px solid rgba(62,207,112,.3);color:#3ecf70}
+.alert-warn{background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.3);color:#f5a623}
+</style>
+</head>
+<body>
+
+<h1>📋 Importar Padrón</h1>
+<p>Seleccioná uno o más archivos PDF del padrón. El sistema los lee automáticamente.</p>
+
+<!-- LOGIN -->
+<div class="card" id="card-login">
+  <h2>🔐 Conectar Firebase</h2>
+  <div class="field">
+    <label>Email</label>
+    <input type="email" id="email" value="carlosprieto15041996@gmail.com"/>
+  </div>
+  <div class="field">
+    <label>Contraseña</label>
+    <input type="password" id="pass" placeholder="Tu contraseña"/>
+  </div>
+  <button class="btn btn-blue" onclick="conectar()">🔌 Conectar</button>
+  <div id="login-status" style="font-size:13px;margin-top:8px;color:#7a84a0"></div>
+</div>
+
+<!-- IMPORTAR -->
+<div class="card" id="card-import" style="display:none">
+  <h2>📂 Seleccionar PDFs</h2>
+
+  <label class="upload-zone" id="upload-zone" for="pdf-input">
+    <div class="icon">📄</div>
+    <p>Tocar para seleccionar PDFs<br><small style="font-size:11px">Podés seleccionar varios a la vez</small></p>
+    <input type="file" id="pdf-input" accept=".pdf" multiple onchange="agregarArchivos(this.files)"/>
+  </label>
+
+  <div class="file-list" id="file-list"></div>
+
+  <div class="stat-row">
+    <div class="stat"><div class="val" id="st-archivos">0</div><div class="lbl">PDFs</div></div>
+    <div class="stat"><div class="val" id="st-registros">0</div><div class="lbl">Registros</div></div>
+    <div class="stat"><div class="val" id="st-subidos">0</div><div class="lbl">Subidos</div></div>
+  </div>
+
+  <div class="progress-outer" id="prog-outer" style="display:none">
+    <div class="progress-inner" id="prog-inner"></div>
+  </div>
+
+  <button class="btn btn-green" id="btn-importar" onclick="importarTodo()" disabled>
+    ☁️ Leer PDFs y subir a Firebase
+  </button>
+  <button class="btn btn-red" onclick="limpiarTodo()" style="background:transparent;border:1px solid #e05555;color:#e05555">
+    🗑 Limpiar padrón en Firebase
+  </button>
+
+  <div class="log" id="log">Esperando archivos...</div>
+</div>
+
+<script>
+// ═══════════════════════════════════
+// FIREBASE CONFIG
+// ═══════════════════════════════════
+const FB_CONFIG = {
+  apiKey:            "AIzaSyA_HCHx76CBrYH8sOBMrosos7ln5UgwgqI",
+  authDomain:        "padron-339.firebaseapp.com",
+  databaseURL:       "https://padron-339-default-rtdb.firebaseio.com",
+  projectId:         "padron-339",
+  storageBucket:     "padron-339.firebasestorage.app",
+  messagingSenderId: "556732839087",
+  appId:             "1:556732839087:web:c6234e38868861c8f3505a"
+};
+
+// PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let DB, AUTH;
+let archivos = [];
+let totalRegistros = 0;
+let totalSubidos = 0;
+
+// ═══════════════════════════════════
+// CONECTAR FIREBASE
+// ═══════════════════════════════════
+async function conectar() {
+  const email = document.getElementById("email").value.trim();
+  const pass  = document.getElementById("pass").value;
+  const status= document.getElementById("login-status");
+  status.textContent = "Conectando...";
+  status.style.color = "#7a84a0";
+
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(FB_CONFIG);
+    DB   = firebase.database();
+    AUTH = firebase.auth();
+    await AUTH.signInWithEmailAndPassword(email, pass);
+    status.textContent = "✅ Conectado como " + email;
+    status.style.color = "#3ecf70";
+    document.getElementById("card-import").style.display = "block";
+    log("Firebase conectado. Listo para importar.");
+  } catch(e) {
+    status.textContent = "❌ " + e.message;
+    status.style.color = "#e05555";
+  }
+}
+
+// ═══════════════════════════════════
+// AGREGAR ARCHIVOS
+// ═══════════════════════════════════
+function agregarArchivos(files) {
+  for (const file of files) {
+    if (!file.name.endsWith('.pdf')) continue;
+    if (archivos.find(a => a.name === file.name)) continue;
+    archivos.push({ file, name: file.name, status: 'wait', registros: 0 });
+  }
+  renderFileList();
+  document.getElementById("btn-importar").disabled = archivos.length === 0;
+  document.getElementById("st-archivos").textContent = archivos.length;
+}
+
+function renderFileList() {
+  const el = document.getElementById("file-list");
+  el.innerHTML = archivos.map((a, i) => `
+    <div class="file-item">
+      <span>📄</span>
+      <span class="name">${a.name}</span>
+      <span class="status status-${a.status}">
+        ${a.status==='wait'?'Pendiente':
+          a.status==='reading'?'Leyendo...':
+          a.status==='ok'?`✅ ${a.registros} reg`:
+          '❌ Error'}
+      </span>
+    </div>`).join("");
+}
+
+// ═══════════════════════════════════
+// LEER PDF CON PDF.JS
+// ═══════════════════════════════════
+async function leerPDF(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  let textoCompleto = "";
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page    = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const texto   = content.items.map(item => item.str).join(" ");
+    textoCompleto += texto + "\n";
+  }
+
+  return textoCompleto;
+}
+
+// ═══════════════════════════════════
+// PARSER DEL PADRÓN
+// ═══════════════════════════════════
+function parsearPadron(texto, seccional = "339") {
+  const registros = [];
+  const lineas = texto.split(/\n/);
+
+  let mesaActual  = "";
+  let localActual = "";
+
+  for (const linea of lineas) {
+    // Detectar mesa
+    const mMesa = linea.match(/MESA\s+(\d+)/i);
+    if (mMesa) { mesaActual = mMesa[1]; continue; }
+
+    // Detectar local
+    const mLocal = linea.match(/Local\s*:\s*\d+\s+(.+)/i);
+    if (mLocal) { localActual = mLocal[1].trim().replace(/\s+/g," "); continue; }
+
+    // Detectar registro con CI
+    // Formato: número CI APELLIDO NOMBRE dirección fecNac fecAfil
+    const m = linea.match(/(\d{1,3})\s+([\d,\.]{5,12})\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s]{3,40}?)\s{2,}(.*?)\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})/);
+    if (!m) continue;
+
+    const ci = m[2].replace(/[,\.]/g,"").trim();
+    if (!ci || isNaN(Number(ci)) || ci.length < 5) continue;
+
+    const fullName = m[3].trim().replace(/\s+/g," ");
+    const partes   = fullName.split(" ");
+    let apellido, nombre;
+    if (partes.length >= 3) {
+      apellido = partes.slice(0,2).join(" ");
+      nombre   = partes.slice(2).join(" ");
+    } else {
+      apellido = partes[0] || fullName;
+      nombre   = partes[1] || "";
+    }
+
+    registros.push({
+      ci,
+      apellido: apellido.trim(),
+      nombre:   nombre.trim(),
+      direccion:(m[4]||"").trim().replace(/\s+/g," ").substring(0,80),
+      fecNac:   m[5]||"",
+      fecAfil:  m[6]||"",
+      mesa:     mesaActual,
+      local:    localActual,
+      seccional,
+      orden:    m[1]
+    });
+  }
+
+  // Deduplicar
+  const seen = new Set();
+  return registros.filter(r => {
+    if (seen.has(r.ci)) return false;
+    seen.add(r.ci); return true;
+  });
+}
+
+// ═══════════════════════════════════
+// SUBIR A FIREBASE EN LOTES
+// ═══════════════════════════════════
+async function subirRegistros(registros) {
+  const LOTE = 100;
+  for (let i = 0; i < registros.length; i += LOTE) {
+    const lote   = registros.slice(i, i+LOTE);
+    const update = {};
+    lote.forEach(r => { update[`padron/${r.ci}`] = r; });
+    await DB.ref().update(update);
+    totalSubidos += lote.length;
+    document.getElementById("st-subidos").textContent = totalSubidos;
+    const pct = Math.round(totalSubidos / totalRegistros * 100);
+    document.getElementById("prog-inner").style.width = pct + "%";
+    log(`Subidos ${totalSubidos}/${totalRegistros} (${pct}%)`);
+    await new Promise(r => setTimeout(r, 60));
+  }
+}
+
+// ═══════════════════════════════════
+// IMPORTAR TODO
+// ═══════════════════════════════════
+async function importarTodo() {
+  const btn = document.getElementById("btn-importar");
+  btn.disabled = true;
+  document.getElementById("prog-outer").style.display = "block";
+  totalRegistros = 0;
+  totalSubidos   = 0;
+
+  // Primero leer todos los PDFs para saber el total
+  let todosRegistros = [];
+
+  for (let i = 0; i < archivos.length; i++) {
+    const a = archivos[i];
+    a.status = 'reading';
+    renderFileList();
+    log(`Leyendo ${a.name}...`);
+
+    try {
+      const texto     = await leerPDF(a.file);
+      const registros = parsearPadron(texto);
+      a.registros     = registros.length;
+      a.status        = 'ok';
+      todosRegistros  = todosRegistros.concat(registros);
+      log(`✅ ${a.name}: ${registros.length} registros detectados`);
+    } catch(e) {
+      a.status = 'err';
+      log(`❌ Error leyendo ${a.name}: ${e.message}`);
+    }
+    renderFileList();
+  }
+
+  // Deduplicar entre archivos
+  const seen = new Set();
+  todosRegistros = todosRegistros.filter(r => {
+    if (seen.has(r.ci)) return false;
+    seen.add(r.ci); return true;
+  });
+
+  totalRegistros = todosRegistros.length;
+  document.getElementById("st-registros").textContent = totalRegistros;
+  log(`\nTotal único: ${totalRegistros} registros. Iniciando subida...`);
+
+  if (totalRegistros === 0) {
+    log("⚠️ No se detectaron registros. Verificá que los PDFs sean del padrón ANR.");
+    btn.disabled = false;
+    return;
+  }
+
+  // Subir a Firebase
+  try {
+    await subirRegistros(todosRegistros);
+    await DB.ref("padron_info").set({
+      total: totalRegistros,
+      fecha: Date.now(),
+      seccional: "339"
+    });
+    log(`\n✅ ¡Listo! ${totalRegistros} registros importados exitosamente.`);
+  } catch(e) {
+    log("❌ Error subiendo: " + e.message);
+  }
+
+  btn.disabled = false;
+}
+
+// ═══════════════════════════════════
+// LIMPIAR PADRÓN
+// ═══════════════════════════════════
+async function limpiarTodo() {
+  if (!DB) { alert("Conectate primero."); return; }
+  if (!confirm("⚠️ ¿Borrar TODO el padrón de Firebase?")) return;
+  await DB.ref("padron").remove();
+  await DB.ref("padron_info").remove();
+  totalSubidos = 0;
+  document.getElementById("st-subidos").textContent = 0;
+  document.getElementById("st-registros").textContent = 0;
+  log("🗑 Padrón eliminado.");
+}
+
+function log(msg) {
+  const el  = document.getElementById("log");
+  const ts  = new Date().toLocaleTimeString("es-PY");
+  el.textContent = `[${ts}] ${msg}\n` + el.textContent;
+}
+
+// Drag & drop
+const zone = document.getElementById("upload-zone");
+zone.addEventListener("dragover", e => { e.preventDefault(); zone.classList.add("drag"); });
+zone.addEventListener("dragleave", () => zone.classList.remove("drag"));
+zone.addEventListener("drop", e => {
+  e.preventDefault();
+  zone.classList.remove("drag");
+  agregarArchivos(e.dataTransfer.files);
+});
+
+// Enter en contraseña
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("pass").addEventListener("keydown", e => {
+    if (e.key === "Enter") conectar();
+  });
+});
+</script>
+</body>
+</html>
