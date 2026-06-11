@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Importar Padrón — PDF Directo</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  background:#0d1117;color:#e6e9f0;min-height:100vh;padding:16px}
+h1{font-size:20px;font-weight:800;margin-bottom:4px}
+p.sub{font-size:13px;color:#7a84a0;line-height:1.6;margin-bottom:14px}
+.card{background:#161b27;border:1px solid #2a3147;border-radius:12px;padding:18px;margin-bottom:14px}
+.card h2{font-size:13px;font-weight:800;margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em;color:#7a84a0}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#7a84a0;margin-bottom:5px}
+.field input{width:100%;background:#1e2436;border:1px solid #2a3147;border-radius:8px;padding:10px 13px;color:#e6e9f0;font-size:14px;outline:none}
+.field input:focus{border-color:#3d7eff}
+.btn{display:flex;align-items:center;justify-content:center;gap:6px;border:none;border-radius:8px;
+  padding:13px 18px;font-size:14px;font-weight:700;cursor:pointer;width:100%;margin-bottom:8px;font-family:inherit}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-blue{background:#3d7eff;color:#fff}
+.btn-green{background:#3ecf70;color:#051a0c}
+.btn-outline-red{background:transparent;border:1px solid #e05555;color:#e05555}
+.upload-zone{background:#1e2436;border:2px dashed #2a3147;border-radius:12px;
+  padding:28px 20px;text-align:center;cursor:pointer;transition:border-color .2s;margin-bottom:12px}
+.upload-zone:hover{border-color:#3d7eff}
+.upload-zone input{display:none}
+.upload-zone .icon{font-size:36px;margin-bottom:8px}
+.upload-zone p{font-size:13px;color:#7a84a0;margin:0}
+.file-list{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.file-item{background:#1e2436;border:1px solid #2a3147;border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px}
+.file-item .name{flex:1;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.badge{font-size:11px;padding:3px 8px;border-radius:20px;font-weight:700;white-space:nowrap}
+.badge-wait{background:rgba(122,132,160,.15);color:#7a84a0}
+.badge-proc{background:rgba(61,126,255,.15);color:#3d7eff}
+.badge-ok{background:rgba(62,207,112,.15);color:#3ecf70}
+.badge-err{background:rgba(224,85,85,.15);color:#e05555}
+.stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
+.stat{background:#1e2436;border-radius:8px;padding:12px;text-align:center}
+.stat .val{font-size:22px;font-weight:800;color:#3d7eff}
+.stat .lbl{font-size:10px;color:#7a84a0;margin-top:2px;text-transform:uppercase;letter-spacing:.05em}
+.prog-outer{background:#1e2436;border-radius:30px;height:8px;overflow:hidden;margin:8px 0;display:none}
+.prog-inner{height:100%;border-radius:30px;background:#3d7eff;width:0;transition:width .2s}
+.log{background:#0d1117;border:1px solid #2a3147;border-radius:8px;padding:12px;
+  font-size:11px;font-family:monospace;white-space:pre-wrap;max-height:160px;overflow-y:auto;color:#3ecf70}
+.alert{border-radius:8px;padding:12px;font-size:13px;margin-bottom:12px;line-height:1.6}
+.alert-warn{background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.3);color:#f5a623}
+</style>
+</head>
+<body>
+
+<h1>📋 Importar Padrón</h1>
+<p class="sub">Seleccioná los PDFs del padrón. El sistema extrae los datos automáticamente.</p>
+
+<div class="card" id="card-login">
+  <h2>🔐 Conectar Firebase</h2>
+  <div class="field">
+    <label>Email</label>
+    <input type="email" id="email" value="carlosprieto15041996@gmail.com"/>
+  </div>
+  <div class="field">
+    <label>Contraseña</label>
+    <input type="password" id="pass" placeholder="Tu contraseña"/>
+  </div>
+  <button class="btn btn-blue" onclick="conectar()">🔌 Conectar</button>
+  <p id="login-st" style="font-size:13px;color:#7a84a0;margin-top:6px"></p>
+</div>
+
+<div class="card" id="card-imp" style="display:none">
+  <h2>📂 Seleccionar PDFs</h2>
+  <div class="alert alert-warn">
+    ⚠️ Los PDFs del padrón ANR contienen texto seleccionable. Si no detecta registros, avisá y usamos el método alternativo.
+  </div>
+  <label class="upload-zone" for="pdf-in">
+    <div class="icon">📄</div>
+    <p>Tocar para seleccionar PDFs<br><small style="font-size:11px">Seleccioná los 4 a la vez</small></p>
+    <input type="file" id="pdf-in" accept=".pdf" multiple onchange="addFiles(this.files)"/>
+  </label>
+  <div class="file-list" id="file-list"></div>
+  <div class="stats">
+    <div class="stat"><div class="val" id="st-pdf">0</div><div class="lbl">PDFs</div></div>
+    <div class="stat"><div class="val" id="st-reg">0</div><div class="lbl">Registros</div></div>
+    <div class="stat"><div class="val" id="st-sub">0</div><div class="lbl">Subidos</div></div>
+  </div>
+  <div class="prog-outer" id="prog-outer"><div class="prog-inner" id="prog-inner"></div></div>
+  <button class="btn btn-green" id="btn-imp" onclick="importAll()" disabled>☁️ Leer PDFs y subir a Firebase</button>
+  <button class="btn btn-outline-red" onclick="limpiar()">🗑 Limpiar padrón en Firebase</button>
+  <div class="log" id="log">Esperando archivos...</div>
+</div>
+
+<script>
+const FB_CONFIG = {
+  apiKey:"AIzaSyA_HCHx76CBrYH8sOBMrosos7ln5UgwgqI",
+  authDomain:"padron-339.firebaseapp.com",
+  databaseURL:"https://padron-339-default-rtdb.firebaseio.com",
+  projectId:"padron-339",
+  storageBucket:"padron-339.firebasestorage.app",
+  messagingSenderId:"556732839087",
+  appId:"1:556732839087:web:c6234e38868861c8f3505a"
+};
+
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let DB, AUTH, files=[], totalReg=0, totalSub=0;
+
+async function conectar(){
+  const email=document.getElementById("email").value.trim();
+  const pass=document.getElementById("pass").value;
+  const st=document.getElementById("login-st");
+  st.textContent="Conectando..."; st.style.color="#7a84a0";
+  try{
+    if(!firebase.apps.length) firebase.initializeApp(FB_CONFIG);
+    DB=firebase.database(); AUTH=firebase.auth();
+    await AUTH.signInWithEmailAndPassword(email,pass);
+    st.textContent="✅ Conectado"; st.style.color="#3ecf70";
+    document.getElementById("card-imp").style.display="block";
+    log("Conectado. Listo para importar.");
+  }catch(e){ st.textContent="❌ "+e.message; st.style.color="#e05555"; }
+}
+
+function addFiles(flist){
+  for(const f of flist){
+    if(!f.name.endsWith('.pdf')) continue;
+    if(files.find(x=>x.name===f.name)) continue;
+    files.push({file:f,name:f.name,status:'wait',reg:0});
+  }
+  renderFiles();
+  document.getElementById("btn-imp").disabled=files.length===0;
+  document.getElementById("st-pdf").textContent=files.length;
+}
+
+function renderFiles(){
+  document.getElementById("file-list").innerHTML=files.map(f=>`
+    <div class="file-item">
+      <span>📄</span>
+      <span class="name">${f.name}</span>
+      <span class="badge badge-${f.status==='wait'?'wait':f.status==='proc'?'proc':f.status==='ok'?'ok':'err'}">
+        ${f.status==='wait'?'Pendiente':f.status==='proc'?'Procesando...':f.status==='ok'?'✅ '+f.reg+' reg':'❌ Error'}
+      </span>
+    </div>`).join("");
+}
+
+// Extrae texto de un PDF (texto real o imagen via OCR)
+async function extractText(file){
+  const buf=await file.arrayBuffer();
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  let fullText="";
+
+  for(let i=1;i<=pdf.numPages;i++){
+    const page=await pdf.getPage(i);
+    const content=await page.getTextContent();
+    
+    // Reconstruir líneas respetando posición Y
+    const items=content.items;
+    if(items.length>10){
+      // PDF con texto real - ordenar por Y descendente, luego X
+      const sorted=[...items].sort((a,b)=>{
+        const dy=Math.round(b.transform[5])-Math.round(a.transform[5]);
+        if(dy!==0) return dy;
+        return a.transform[4]-b.transform[4];
+      });
+      
+      let lastY=null, line="";
+      for(const item of sorted){
+        const y=Math.round(item.transform[5]);
+        if(lastY!==null && Math.abs(y-lastY)>3){
+          fullText+=line+"\n";
+          line=item.str;
+        } else {
+          line+=(line?" ":"")+item.str;
+        }
+        lastY=y;
+      }
+      if(line) fullText+=line+"\n";
+    } else {
+      // PDF escaneado - usar OCR en la página renderizada
+      log(`Página ${i}: usando OCR...`);
+      const vp=page.getViewport({scale:2.0});
+      const canvas=document.createElement("canvas");
+      canvas.width=vp.width; canvas.height=vp.height;
+      const ctx=canvas.getContext("2d");
+      await page.render({canvasContext:ctx,viewport:vp}).promise;
+      const result=await Tesseract.recognize(canvas,"spa+por",{
+        tessedit_char_whitelist:"ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜabcdefghijklmnopqrstuvwxyzáéíóúñü0123456789/,. -"
+      });
+      fullText+=result.data.text+"\n";
+    }
+  }
+  return fullText;
+}
+
+// Parser robusto
+function parse(texto){
+  const regs=[];
+  const lines=texto.split(/\n/);
+  let mesa="",local="";
+
+  for(const raw of lines){
+    const line=raw.replace(/\s+/g," ").trim();
+    
+    const mM=line.match(/MESA\s+(\d+)/i);
+    if(mM){mesa=mM[1];continue;}
+    
+    const mL=line.match(/Local\s*:?\s*\d*\s*(.{5,60})/i);
+    if(mL&&!line.match(/^\d/)){local=mL[1].trim().substring(0,50);continue;}
+
+    // Patrón principal: orden CI APELLIDOS NOMBRES ... fecNac fecAfil
+    const patterns=[
+      // Con dos fechas al final
+      /^(\d{1,3})\s+([\d,\.]{5,12})\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑA-Za-záéíóúñ\s]{3,45}?)\s{2,}(.*?)\s{1,}(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})/,
+      // Sin dirección
+      /^(\d{1,3})\s+([\d,\.]{5,12})\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑA-Za-záéíóúñ\s]{3,45}?)\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})/,
+    ];
+
+    let m=null;
+    for(const pat of patterns){
+      m=line.match(pat);
+      if(m) break;
+    }
+    if(!m) continue;
+
+    const ci=m[2].replace(/[,\.]/g,"").trim();
+    if(!ci||isNaN(Number(ci))||ci.length<5||ci.length>9) continue;
+
+    const nm=m[3].trim().replace(/\s+/g," ");
+    const parts=nm.split(" ");
+    let ape="",nom="";
+    if(parts.length>=3){ape=parts.slice(0,2).join(" ");nom=parts.slice(2).join(" ");}
+    else{ape=parts[0]||nm;nom=parts[1]||"";}
+
+    const hasDireccion=m.length>=7;
+    regs.push({
+      ci,ape:ape.trim(),nom:nom.trim(),
+      dir:hasDireccion?(m[4]||"").trim().substring(0,60):"",
+      fecNac:hasDireccion?m[5]:m[4],
+      fecAfil:hasDireccion?m[6]:m[5],
+      mesa,local,sec:"339",ord:m[1]
+    });
+  }
+
+  const seen=new Set();
+  return regs.filter(r=>{
+    if(seen.has(r.ci)) return false;
+    seen.add(r.ci); return true;
+  });
+}
+
+async function importAll(){
+  const btn=document.getElementById("btn-imp");
+  btn.disabled=true;
+  document.getElementById("prog-outer").style.display="block";
+  totalReg=0;totalSub=0;
+
+  let all=[];
+  for(let i=0;i<files.length;i++){
+    const f=files[i];
+    f.status='proc'; renderFiles();
+    log(`Procesando ${f.name}...`);
+    try{
+      const txt=await extractText(f.file);
+      const regs=parse(txt);
+      f.reg=regs.length; f.status='ok';
+      all=all.concat(regs);
+      log(`✅ ${f.name}: ${regs.length} registros`);
+      if(regs.length===0){
+        // Mostrar muestra del texto para debug
+        log(`Muestra del texto extraído:\n${txt.substring(0,300)}`);
+      }
+    }catch(e){
+      f.status='err';
+      log(`❌ ${f.name}: ${e.message}`);
+    }
+    renderFiles();
+  }
+
+  // Deduplicar entre archivos
+  const seen=new Set();
+  all=all.filter(r=>{
+    if(seen.has(r.ci)) return false;
+    seen.add(r.ci); return true;
+  });
+
+  totalReg=all.length;
+  document.getElementById("st-reg").textContent=totalReg;
+  log(`\nTotal: ${totalReg} registros únicos. Subiendo...`);
+
+  if(totalReg===0){
+    log("⚠️ 0 registros detectados. Revisá la muestra de texto de arriba.");
+    btn.disabled=false; return;
+  }
+
+  // Subir en lotes
+  const LOTE=100;
+  for(let i=0;i<all.length;i+=LOTE){
+    const lote=all.slice(i,i+LOTE);
+    const upd={};
+    lote.forEach(r=>{upd[`padron/${r.ci}`]={
+      ci:r.ci,apellido:r.ape,nombre:r.nom,
+      direccion:r.dir,fecNac:r.fecNac,fecAfil:r.fecAfil,
+      mesa:r.mesa,local:r.local,seccional:r.sec,orden:r.ord
+    };});
+    await DB.ref().update(upd);
+    totalSub+=lote.length;
+    document.getElementById("st-sub").textContent=totalSub;
+    document.getElementById("prog-inner").style.width=
+      Math.round(totalSub/totalReg*100)+"%";
+    await new Promise(r=>setTimeout(r,60));
+  }
+
+  await DB.ref("padron_info").set({total:totalReg,fecha:Date.now(),seccional:"339"});
+  log(`\n✅ ¡Listo! ${totalReg} registros importados.`);
+  btn.disabled=false;
+}
+
+async function limpiar(){
+  if(!DB){alert("Conectate primero.");return;}
+  if(!confirm("⚠️ ¿Borrar TODO el padrón?")) return;
+  await DB.ref("padron").remove();
+  await DB.ref("padron_info").remove();
+  log("🗑 Padrón eliminado.");
+  document.getElementById("st-reg").textContent=0;
+  document.getElementById("st-sub").textContent=0;
+}
+
+function log(msg){
+  const el=document.getElementById("log");
+  const ts=new Date().toLocaleTimeString("es-PY");
+  el.textContent=`[${ts}] ${msg}\n`+el.textContent;
+}
+
+document.getElementById("pass").addEventListener("keydown",e=>{
+  if(e.key==="Enter") conectar();
+});
+</script>
+</body>
+</html>
