@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Subir Padrón Completo 44.792</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui;background:#0d1117;color:#e6e9f0;padding:20px;max-width:480px;margin:0 auto}
+h1{font-size:20px;margin-bottom:6px}
+p{font-size:13px;color:#7a84a0;margin-bottom:14px;line-height:1.6}
+.card{background:#161b27;border:1px solid #2a3147;border-radius:12px;padding:20px;margin-bottom:14px}
+.field label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;color:#7a84a0;margin-bottom:4px}
+.field input{width:100%;background:#1e2436;border:1px solid #2a3147;border-radius:8px;padding:10px;color:#e6e9f0;font-size:15px;outline:none;margin-bottom:10px}
+.btn{width:100%;background:#3d7eff;color:#fff;border:none;border-radius:8px;padding:13px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:8px;font-family:inherit}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.stat{text-align:center;font-size:32px;font-weight:800;color:#3d7eff;margin:8px 0}
+.stat small{display:block;font-size:12px;color:#7a84a0;font-weight:400;margin-top:2px}
+.prog{background:#1e2436;border-radius:30px;height:12px;overflow:hidden;margin:12px 0;display:none}
+.prog-inner{height:100%;background:#3d7eff;width:0;transition:width .3s;border-radius:30px}
+.log{background:#0d1117;border:1px solid #2a3147;border-radius:8px;padding:10px;font-size:11px;font-family:monospace;max-height:180px;overflow-y:auto;color:#3ecf70;margin-top:8px}
+.partes{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:10px 0}
+.parte{background:#1e2436;border-radius:6px;padding:6px;text-align:center;font-size:11px}
+.parte.ok{background:rgba(62,207,112,.15);color:#3ecf70;border:1px solid rgba(62,207,112,.3)}
+.parte.loading{background:rgba(61,126,255,.15);color:#3d7eff;border:1px solid rgba(61,126,255,.3)}
+.parte.wait{color:#7a84a0;border:1px solid #2a3147}
+</style>
+</head>
+<body>
+
+<h1>☁️ Padrón Completo</h1>
+<p>Sube los <strong>44.792 registros</strong> correctamente extraídos de los 4 PDFs, sin duplicados.</p>
+
+<div class="card">
+  <div class="stat">44.792<small>registros únicos de los 4 PDFs</small></div>
+
+  <div class="field">
+    <label>Contraseña de admin</label>
+    <input type="password" id="pass" placeholder="Tu contraseña de Firebase"/>
+  </div>
+
+  <div class="partes" id="partes">
+    <div class="parte wait" id="p1">Parte 1<br>9.000</div>
+    <div class="parte wait" id="p2">Parte 2<br>9.000</div>
+    <div class="parte wait" id="p3">Parte 3<br>9.000</div>
+    <div class="parte wait" id="p4">Parte 4<br>9.000</div>
+    <div class="parte wait" id="p5">Parte 5<br>8.792</div>
+  </div>
+
+  <div class="prog" id="prog"><div class="prog-inner" id="prog-inner"></div></div>
+
+  <button class="btn" id="btn" onclick="iniciar()">
+    ☁️ Subir padrón completo a Firebase
+  </button>
+
+  <div class="log" id="log">Esperando...</div>
+</div>
+
+<script>
+const FB_CONFIG = {
+  apiKey:"AIzaSyA_HCHx76CBrYH8sOBMrosos7ln5UgwgqI",
+  authDomain:"padron-339.firebaseapp.com",
+  databaseURL:"https://padron-339-default-rtdb.firebaseio.com",
+  projectId:"padron-339",
+  storageBucket:"padron-339.firebasestorage.app",
+  messagingSenderId:"556732839087",
+  appId:"1:556732839087:web:c6234e38868861c8f3505a"
+};
+
+// URLs de las partes en GitHub
+const BASE = "https://raw.githubusercontent.com/joescharly/padron339/main/";
+const PARTES = [
+  "padron-parte-1.json",
+  "padron-parte-2.json",
+  "padron-parte-3.json",
+  "padron-parte-4.json",
+  "padron-parte-5.json"
+];
+
+let DB, AUTH;
+
+function log(m){
+  const e=document.getElementById("log");
+  const ts=new Date().toLocaleTimeString("es-PY");
+  e.textContent=`[${ts}] ${m}\n`+e.textContent;
+}
+
+function setParte(n, estado){
+  const el=document.getElementById("p"+n);
+  el.className="parte "+estado;
+  if(estado==="ok") el.innerHTML=el.innerHTML.replace("Parte","✅");
+  if(estado==="loading") el.innerHTML=el.innerHTML.replace("Parte","⏳");
+}
+
+async function iniciar(){
+  const pass=document.getElementById("pass").value;
+  if(!pass){alert("Ingresá tu contraseña.");return;}
+  const btn=document.getElementById("btn");
+  btn.disabled=true;
+  btn.textContent="Conectando...";
+
+  try{
+    if(!firebase.apps.length) firebase.initializeApp(FB_CONFIG);
+    DB=firebase.database(); AUTH=firebase.auth();
+    await AUTH.signInWithEmailAndPassword("carlosprieto15041996@gmail.com",pass);
+    log("✅ Conectado a Firebase");
+    document.getElementById("prog").style.display="block";
+    btn.textContent="Subiendo...";
+
+    // Limpiar padrón anterior
+    log("Limpiando padrón anterior...");
+    await DB.ref("padron").remove();
+    await DB.ref("padron_info").remove();
+    log("Padrón anterior eliminado.");
+
+    let totalSubidos=0;
+    const totalGeneral=44792;
+
+    for(let i=0;i<PARTES.length;i++){
+      const n=i+1;
+      setParte(n,"loading");
+      log(`Descargando Parte ${n}...`);
+
+      const resp=await fetch(BASE+PARTES[i]);
+      if(!resp.ok) throw new Error(`No se pudo descargar Parte ${n}: ${resp.status}`);
+      const registros=await resp.json();
+      log(`Parte ${n}: ${registros.length} registros. Subiendo...`);
+
+      // Subir en lotes de 200
+      const LOTE=200;
+      for(let j=0;j<registros.length;j+=LOTE){
+        const lote=registros.slice(j,j+LOTE);
+        const upd={};
+        lote.forEach(r=>{upd[`padron/${r.ci}`]=r;});
+        await DB.ref().update(upd);
+        totalSubidos+=lote.length;
+        const pct=Math.round(totalSubidos/totalGeneral*100);
+        document.getElementById("prog-inner").style.width=pct+"%";
+        await new Promise(r=>setTimeout(r,25));
+      }
+
+      setParte(n,"ok");
+      log(`✅ Parte ${n} completada. Total acumulado: ${totalSubidos}`);
+    }
+
+    await DB.ref("padron_info").set({
+      total:totalSubidos,
+      fecha:Date.now(),
+      seccional:"339,338,123",
+      version:2
+    });
+
+    log(`\n🎉 ¡LISTO! ${totalSubidos} registros importados correctamente.`);
+    log("Wilson Davalos (6287163) ya debería aparecer en la búsqueda.");
+    btn.textContent="✅ Completado - "+totalSubidos+" registros";
+
+  }catch(e){
+    log("❌ Error: "+e.message);
+    btn.disabled=false;
+    btn.textContent="☁️ Subir padrón completo a Firebase";
+  }
+}
+
+document.getElementById("pass").addEventListener("keydown",e=>{
+  if(e.key==="Enter") iniciar();
+});
+</script>
+</body>
+</html>
