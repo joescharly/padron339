@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>App Brigadas — Padrón 339</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0d1117;--surface:#161b27;--surface2:#1e2436;--border:#2a3147;
+  --text:#e6e9f0;--muted:#7a84a0;--accent:#3d7eff;--success:#3ecf70;
+  --danger:#e05555;--warning:#f5a623;--font:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh}
+button,input,textarea{font-family:var(--font)}
+
+/* ── LOGIN ── */
+#screen-login{min-height:100vh;display:flex;align-items:center;justify-content:center;
+  padding:20px;background:radial-gradient(ellipse at 30% 20%,#1a2e5a,var(--bg) 65%)}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:32px 24px;width:100%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.login-logo{text-align:center;margin-bottom:24px}
+.login-logo .icon{font-size:44px;margin-bottom:8px}
+.login-logo h1{font-size:20px;font-weight:800}
+.login-logo p{font-size:13px;color:var(--muted);margin-top:4px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.07em;color:var(--muted);margin-bottom:5px}
+.field input{width:100%;background:var(--surface2);border:1px solid var(--border);
+  border-radius:8px;padding:11px 14px;color:var(--text);font-size:15px;outline:none}
+.field input:focus{border-color:var(--accent)}
+.btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;border:none;
+  border-radius:8px;padding:13px;font-size:15px;font-weight:700;cursor:pointer;
+  margin-bottom:8px;font-family:var(--font);transition:filter .15s}
+.btn:hover{filter:brightness(1.1)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-blue{background:var(--accent);color:#fff}
+.btn-green{background:var(--success);color:#051a0c}
+.btn-red{background:var(--danger);color:#fff}
+.err-msg{color:var(--danger);font-size:13px;text-align:center;margin-top:8px;min-height:18px}
+
+/* ── APP ── */
+#screen-app{display:none;flex-direction:column;min-height:100vh}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);
+  padding:0 16px;height:54px;display:flex;align-items:center;gap:12px;
+  position:sticky;top:0;z-index:100}
+.tb-color{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+.tb-title{flex:1;font-weight:800;font-size:15px}
+.tb-name{font-size:12px;color:var(--muted)}
+.btn-sm-icon{background:transparent;border:none;color:var(--muted);
+  font-size:20px;cursor:pointer;padding:4px}
+
+/* ── TABS ── */
+.tabs{display:flex;background:var(--surface);border-bottom:1px solid var(--border);
+  position:sticky;top:54px;z-index:99}
+.tab{flex:1;padding:12px 4px;font-size:12px;font-weight:700;text-align:center;
+  cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;
+  text-transform:uppercase;letter-spacing:.05em;transition:all .15s}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* ── LISTA ── */
+.lista-content{padding:12px;padding-bottom:80px}
+.search-box{position:relative;margin-bottom:10px}
+.search-box input{width:100%;background:var(--surface);border:1px solid var(--border);
+  border-radius:30px;padding:10px 16px 10px 40px;color:var(--text);font-size:15px;outline:none}
+.search-box input:focus{border-color:var(--accent)}
+.search-box .si{position:absolute;left:14px;top:50%;transform:translateY(-50%);
+  color:var(--muted);pointer-events:none}
+.filters{display:flex;gap:6px;margin-bottom:10px;overflow-x:auto}
+.fchip{background:var(--surface2);border:1px solid var(--border);border-radius:20px;
+  padding:4px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;color:var(--muted)}
+.fchip.active{border-color:var(--accent);color:var(--accent);background:rgba(61,126,255,.1)}
+
+.persona-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:background .15s}
+.persona-card:active{background:var(--surface2)}
+.pc-ci{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.05em}
+.pc-nombre{font-size:15px;font-weight:700;margin:2px 0}
+.pc-sub{font-size:12px;color:var(--muted)}
+.pc-badge{float:right;margin-top:2px}
+.badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;
+  font-size:11px;font-weight:800}
+.badge-pend{background:rgba(245,166,35,.15);color:var(--warning);border:1px solid rgba(245,166,35,.3)}
+.badge-ok{background:rgba(62,207,112,.15);color:var(--success);border:1px solid rgba(62,207,112,.3)}
+
+.hint{text-align:center;padding:40px 20px;color:var(--muted);font-size:14px;line-height:1.7}
+.hint .hi{font-size:36px;margin-bottom:10px}
+
+/* ── STATS ── */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center}
+.stat-val{font-size:32px;font-weight:800;letter-spacing:-1px}
+.stat-lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:4px}
+.prog-outer{background:var(--surface2);border-radius:30px;height:8px;overflow:hidden;margin:12px 14px 0}
+.prog-inner{height:100%;border-radius:30px;background:var(--accent);transition:width .5s}
+
+/* ── MODAL ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;
+  display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(4px)}
+.modal-overlay.hidden{display:none}
+.modal-sheet{background:var(--surface);border-radius:16px 16px 0 0;width:100%;
+  max-height:90vh;overflow-y:auto;box-shadow:0 -4px 32px rgba(0,0,0,.4);
+  animation:slideUp .25s ease}
+@keyframes slideUp{from{transform:translateY(30px);opacity:.5}to{transform:translateY(0);opacity:1}}
+.modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:10px auto 0}
+.modal-hdr{padding:16px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:flex-start}
+.modal-hdr-info{flex:1}
+.modal-ci{font-size:11px;font-weight:700;letter-spacing:.07em;color:var(--muted)}
+.modal-nombre{font-size:18px;font-weight:800;margin-top:2px}
+.modal-close{background:transparent;border:none;color:var(--muted);font-size:22px;cursor:pointer}
+.modal-body{padding:16px;display:flex;flex-direction:column;gap:12px}
+.info-row{display:flex;gap:8px;flex-wrap:wrap}
+.info-chip{background:var(--surface2);border:1px solid var(--border);border-radius:6px;
+  padding:5px 10px;font-size:12px}
+.info-chip strong{display:block;font-size:10px;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.05em;margin-bottom:1px}
+.foto-zone{background:var(--surface2);border:2px dashed var(--border);border-radius:12px;
+  padding:24px;text-align:center;cursor:pointer;transition:border-color .2s}
+.foto-zone:hover{border-color:var(--accent)}
+.foto-zone input{display:none}
+.foto-zone .icon{font-size:32px;margin-bottom:6px}
+.foto-zone p{font-size:13px;color:var(--muted)}
+.foto-preview{width:100%;border-radius:10px;margin-top:8px;display:none}
+.atendido-box{background:rgba(62,207,112,.08);border:1px solid rgba(62,207,112,.3);
+  border-radius:10px;padding:14px;text-align:center}
+.atendido-box .icon{font-size:28px}
+.atendido-box p{font-size:13px;color:var(--success);margin-top:6px;font-weight:600}
+.atendido-box small{font-size:11px;color:var(--muted)}
+.foto-thumb-grid{display:flex;flex-wrap:wrap;gap:6px}
+.foto-thumb{width:70px;height:70px;object-fit:cover;border-radius:8px;cursor:pointer;
+  border:2px solid var(--border)}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="screen-login">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="icon">🚶</div>
+      <h1>App Brigadas</h1>
+      <p>Padrón 339 — Coronel Oviedo</p>
+    </div>
+    <div class="field">
+      <label>Tu nombre completo</label>
+      <input type="text" id="li-nombre" placeholder="Juan Pérez" autocomplete="name"/>
+    </div>
+    <div class="field">
+      <label>Código de brigada</label>
+      <input type="text" id="li-codigo" placeholder="Ej: AMARILLO-2026" 
+             autocomplete="off" autocorrect="off" style="text-transform:uppercase;letter-spacing:.1em"/>
+    </div>
+    <button class="btn btn-blue" id="li-btn" onclick="APP.login()">Ingresar</button>
+    <p class="err-msg" id="li-err"></p>
+    <p style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px">
+      El código te lo provee el coordinador de tu brigada
+    </p>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="screen-app">
+  <div class="topbar">
+    <div class="tb-color" id="tb-color"></div>
+    <div class="tb-title" id="tb-title">Brigada</div>
+    <div class="tb-name" id="tb-name"></div>
+    <button class="btn-sm-icon" onclick="APP.logout()" title="Salir">🚪</button>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="APP.goTab('lista')" id="tab-lista">📋 Mis personas</div>
+    <div class="tab" onclick="APP.goTab('stats')" id="tab-stats">📊 Progreso</div>
+  </div>
+
+  <!-- TAB LISTA -->
+  <div id="tab-content-lista" style="padding-bottom:20px">
+    <div class="lista-content">
+      <div class="search-box">
+        <span class="si">⌕</span>
+        <input type="search" id="search-inp" placeholder="Buscar por nombre o CI..."
+               oninput="APP.buscar(this.value)" autocomplete="off"/>
+      </div>
+      <div class="filters">
+        <div class="fchip active" onclick="APP.setFiltro('todos')">Todos</div>
+        <div class="fchip" onclick="APP.setFiltro('pendiente')">Pendientes</div>
+        <div class="fchip" onclick="APP.setFiltro('atendido')">Atendidos ✅</div>
+      </div>
+      <div id="lista-personas">
+        <div class="hint"><div class="hi">⏳</div><p>Cargando personas...</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB STATS -->
+  <div id="tab-content-stats" style="display:none;padding-bottom:20px">
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-val" id="st-total" style="color:var(--accent)">0</div>
+        <div class="stat-lbl">Asignadas</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" id="st-atendidos" style="color:var(--success)">0</div>
+        <div class="stat-lbl">Atendidas ✅</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" id="st-pend" style="color:var(--warning)">0</div>
+        <div class="stat-lbl">Pendientes</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" id="st-pct">0%</div>
+        <div class="stat-lbl">Completado</div>
+      </div>
+    </div>
+    <div class="prog-outer">
+      <div class="prog-inner" id="prog-inner" style="width:0%"></div>
+    </div>
+    <div style="padding:14px">
+      <p style="font-size:12px;color:var(--muted);text-align:center;margin-top:8px">
+        Actualizado en tiempo real
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PERSONA -->
+<div class="modal-overlay hidden" id="modal">
+  <div class="modal-sheet" id="modal-content">
+    <div class="modal-handle"></div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════
+// CONFIG FIREBASE
+// ══════════════════════
+const FB_CONFIG = {
+  apiKey:"AIzaSyA_HCHx76CBrYH8sOBMrosos7ln5UgwgqI",
+  authDomain:"padron-339.firebaseapp.com",
+  databaseURL:"https://padron-339-default-rtdb.firebaseio.com",
+  projectId:"padron-339",
+  storageBucket:"padron-339.firebasestorage.app",
+  messagingSenderId:"556732839087",
+  appId:"1:556732839087:web:c6234e38868861c8f3505a"
+};
+
+const GRUPOS = {
+  amarillo:{label:"Amarillo",bg:"#FFD600",tx:"#1a1400"},
+  azul:    {label:"Azul",    bg:"#1a56db",tx:"#ffffff"},
+  verde:   {label:"Verde",   bg:"#1e8a3e",tx:"#ffffff"},
+  rojo:    {label:"Rojo",    bg:"#c82020",tx:"#ffffff"},
+  naranja: {label:"Naranja", bg:"#d9620a",tx:"#ffffff"},
+  violeta: {label:"Violeta", bg:"#7c3aed",tx:"#ffffff"},
+};
+
+let DB, STORAGE;
+let miColor = null;
+let miNombre = "";
+let miCodigo = "";
+let estadosLocal = {};
+let padronLocal = {};
+let filtroActual = "todos";
+let queryActual = "";
+
+// ══════════════════════
+// INIT FIREBASE
+// ══════════════════════
+function initFB() {
+  if (!firebase.apps.length) firebase.initializeApp(FB_CONFIG);
+  DB      = firebase.database();
+  STORAGE = firebase.storage();
+}
+
+// ══════════════════════
+// UTILS
+// ══════════════════════
+function norm(s){ return String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9 ]/g,""); }
+function formatCI(ci){ return String(ci).replace(/\B(?=(\d{3})+(?!\d))/g,"."); }
+function timeAgo(ts){
+  if(!ts) return "";
+  const d=Math.floor((Date.now()-ts)/1000);
+  if(d<60) return "ahora";
+  if(d<3600) return Math.floor(d/60)+"m";
+  if(d<86400) return Math.floor(d/3600)+"h";
+  return new Date(ts).toLocaleDateString("es-PY");
+}
+
+// ══════════════════════
+// LOGIN
+// ══════════════════════
+const APP = {
+
+  async login() {
+    const nombre = document.getElementById("li-nombre").value.trim();
+    const codigo = document.getElementById("li-codigo").value.trim().toUpperCase();
+    const err    = document.getElementById("li-err");
+    const btn    = document.getElementById("li-btn");
+
+    if (!nombre) { err.textContent="Ingresá tu nombre."; return; }
+    if (!codigo) { err.textContent="Ingresá el código de brigada."; return; }
+
+    btn.disabled=true; btn.textContent="Verificando...";
+    err.textContent="";
+
+    try {
+      initFB();
+      // Verificar código en Firebase
+      const snap = await DB.ref(`codigos_brigada/${codigo}`).get();
+      if (!snap.exists()) {
+        err.textContent="Código incorrecto. Verificá con tu coordinador.";
+        btn.disabled=false; btn.textContent="Ingresar"; return;
+      }
+
+      const info = snap.val();
+      miColor  = info.color;
+      miNombre = nombre;
+      miCodigo = codigo;
+
+      // Registrar acceso
+      const accKey = Date.now()+"_"+nombre.replace(/\s/g,"_");
+      await DB.ref(`brigada_accesos/${codigo}/${accKey}`).set({
+        nombre, timestamp: Date.now(), color: miColor
+      });
+
+      // Guardar en sessionStorage
+      sessionStorage.setItem("brigada", JSON.stringify({miColor, miNombre, miCodigo}));
+
+      this.setupUI();
+      this.listenEstados();
+
+    } catch(e) {
+      err.textContent="Error: "+e.message;
+      btn.disabled=false; btn.textContent="Ingresar";
+    }
+  },
+
+  logout() {
+    if (!confirm("¿Cerrar sesión?")) return;
+    sessionStorage.removeItem("brigada");
+    document.getElementById("screen-app").style.display="none";
+    document.getElementById("screen-login").style.display="flex";
+    document.getElementById("li-nombre").value="";
+    document.getElementById("li-codigo").value="";
+    document.getElementById("li-err").textContent="";
+    document.getElementById("li-btn").disabled=false;
+    document.getElementById("li-btn").textContent="Ingresar";
+    estadosLocal={}; padronLocal={};
+  },
+
+  // ── SETUP UI ──
+  setupUI() {
+    const g = GRUPOS[miColor] || {label:miColor,bg:"#888",tx:"#fff"};
+    document.getElementById("tb-color").style.background = g.bg;
+    document.getElementById("tb-title").textContent = "Brigada "+g.label;
+    document.getElementById("tb-name").textContent  = miNombre;
+    document.getElementById("screen-login").style.display  = "none";
+    document.getElementById("screen-app").style.display    = "flex";
+    document.getElementById("screen-app").style.flexDirection = "column";
+  },
+
+  // ── ESCUCHAR ESTADOS EN TIEMPO REAL ──
+  listenEstados() {
+    DB.ref("estados").on("value", snap => {
+      estadosLocal = snap.exists() ? snap.val() : {};
+      this.renderLista();
+      this.updateStats();
+    });
+  },
+
+  // ── TABS ──
+  goTab(tab) {
+    ["lista","stats"].forEach(t => {
+      document.getElementById("tab-content-"+t).style.display = t===tab?"block":"none";
+      document.getElementById("tab-"+t).classList.toggle("active", t===tab);
+    });
+    if (tab==="stats") this.updateStats();
+  },
+
+  // ── FILTRO ──
+  setFiltro(f) {
+    filtroActual = f;
+    document.querySelectorAll(".fchip").forEach(c => {
+      c.classList.toggle("active",
+        c.textContent.includes(f==="todos"?"Todos":f==="pendiente"?"Pendientes":"Atendidos"));
+    });
+    this.renderLista();
+  },
+
+  buscar(q) {
+    queryActual = q.trim();
+    this.renderLista();
+  },
+
+  // ── RENDER LISTA ──
+  renderLista() {
+    // Personas de mi color
+    let personas = Object.entries(estadosLocal)
+      .filter(([ci, e]) => e.color === miColor)
+      .map(([ci, e]) => ({ci, ...e}));
+
+    // Filtro estado
+    if (filtroActual === "pendiente") personas = personas.filter(p => !p.atendido);
+    if (filtroActual === "atendido")  personas = personas.filter(p => p.atendido);
+
+    // Búsqueda
+    if (queryActual.length >= 2) {
+      const qn = norm(queryActual);
+      const esCI = /^\d/.test(queryActual.replace(/\./g,""));
+      if (esCI) {
+        const ci = queryActual.replace(/[^\d]/g,"");
+        personas = personas.filter(p => String(p.ci).includes(ci));
+      } else {
+        personas = personas.filter(p => {
+          const pad = padronLocal[p.ci];
+          if (!pad) return norm(p.ci).includes(qn);
+          return norm(`${pad.apellido||pad.ape||""} ${pad.nombre||pad.nom||""}`).includes(qn);
+        });
+      }
+    }
+
+    // Ordenar: pendientes primero
+    personas.sort((a,b) => {
+      if (a.atendido && !b.atendido) return 1;
+      if (!a.atendido && b.atendido) return -1;
+      return (b.timestamp||0)-(a.timestamp||0);
+    });
+
+    const el = document.getElementById("lista-personas");
+
+    if (personas.length === 0) {
+      el.innerHTML = `<div class="hint">
+        <div class="hi">${filtroActual==="atendido"?"✅":"📋"}</div>
+        <p>${filtroActual==="atendido"?"No hay personas atendidas aún.":
+            filtroActual==="pendiente"?"¡Todas las personas fueron atendidas! 🎉":
+            "Aún no hay personas asignadas a tu brigada."}</p>
+      </div>`;
+      return;
+    }
+
+    el.innerHTML = personas.map(p => {
+      const pad = padronLocal[p.ci];
+      const nombre = pad ? `${pad.apellido||pad.ape||""}, ${pad.nombre||pad.nom||""}` : `CI ${formatCI(p.ci)}`;
+      const mesa   = pad ? `Mesa ${pad.mesa||"—"} · Orden ${pad.orden||"—"}` : "";
+      const badge  = p.atendido
+        ? `<span class="badge badge-ok">✅ Atendido</span>`
+        : `<span class="badge badge-pend">⏳ Pendiente</span>`;
+      return `
+        <div class="persona-card" onclick="APP.abrirPersona('${p.ci}')">
+          <div class="pc-badge">${badge}</div>
+          <div class="pc-ci">CI ${formatCI(p.ci)}</div>
+          <div class="pc-nombre">${nombre}</div>
+          ${mesa ? `<div class="pc-sub">${mesa}</div>` : ""}
+          <div class="pc-sub" style="margin-top:2px">${timeAgo(p.timestamp)}</div>
+        </div>`;
+    }).join("");
+
+    // Cargar datos del padrón para los CIs que no tenemos
+    personas.forEach(p => {
+      if (!padronLocal[p.ci]) {
+        DB.ref(`padron/${p.ci}`).get().then(s => {
+          if (s.exists()) { padronLocal[p.ci]=s.val(); this.renderLista(); }
+        });
+      }
+    });
+  },
+
+  // ── STATS ──
+  updateStats() {
+    const personas = Object.entries(estadosLocal).filter(([ci,e])=>e.color===miColor);
+    const total    = personas.length;
+    const atend    = personas.filter(([ci,e])=>e.atendido).length;
+    const pend     = total-atend;
+    const pct      = total>0 ? Math.round(atend/total*100) : 0;
+
+    document.getElementById("st-total").textContent    = total;
+    document.getElementById("st-atendidos").textContent= atend;
+    document.getElementById("st-pend").textContent     = pend;
+    document.getElementById("st-pct").textContent      = pct+"%";
+    document.getElementById("prog-inner").style.width  = pct+"%";
+
+    const g = GRUPOS[miColor]||{bg:"var(--accent)"};
+    document.getElementById("prog-inner").style.background = g.bg;
+  },
+
+  // ── ABRIR PERSONA ──
+  abrirPersona(ci) {
+    const est = estadosLocal[ci];
+    const pad = padronLocal[ci];
+    const g   = GRUPOS[miColor]||{label:miColor,bg:"#888",tx:"#fff"};
+
+    const nombre = pad
+      ? `${pad.apellido||pad.ape||""}, ${pad.nombre||pad.nom||""}`
+      : `CI ${formatCI(ci)}`;
+
+    const fotos = est?.fotos_brigada
+      ? `<div class="foto-thumb-grid">${Object.values(est.fotos_brigada).map(f=>
+          `<img src="${f.url}" class="foto-thumb" onclick="window.open('${f.url}')">`
+        ).join("")}</div>` : "";
+
+    let contenido = "";
+
+    if (est?.atendido_brigada) {
+      // Ya fue atendida
+      contenido = `
+        <div class="atendido-box">
+          <div class="icon">✅</div>
+          <p>Persona confirmada como votante</p>
+          <small>por ${est.atendido_brigada_por||"?"} · ${timeAgo(est.timestamp_brigada)}</small>
+        </div>
+        ${fotos}
+        <button class="btn btn-red" onclick="APP.desmarcarBrigada('${ci}')">
+          ↩ Deshacer confirmación
+        </button>`;
+    } else {
+      // Pendiente — mostrar formulario
+      contenido = `
+        ${fotos}
+        <label class="foto-zone" for="foto-inp-${ci}">
+          <input type="file" id="foto-inp-${ci}" accept="image/*" capture="environment"
+                 onchange="APP.previewFoto(this,'${ci}')"/>
+          <div class="icon">📷</div>
+          <p>Tocar para fotografiar la mesa</p>
+        </label>
+        <img id="foto-prev-${ci}" class="foto-preview"/>
+        <button class="btn btn-green" id="btn-confirmar-${ci}"
+          onclick="APP.confirmarVoto('${ci}')">
+          ✅ Confirmar que votó + subir foto
+        </button>`;
+    }
+
+    document.getElementById("modal-content").innerHTML = `
+      <div class="modal-handle"></div>
+      <div class="modal-hdr" style="background:${g.bg};color:${g.tx}">
+        <div class="modal-hdr-info">
+          <div class="modal-ci">CI ${formatCI(ci)}</div>
+          <div class="modal-nombre">${nombre}</div>
+        </div>
+        <button class="modal-close" style="color:${g.tx}" onclick="APP.cerrarModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="info-row">
+          ${pad ? `
+            <div class="info-chip"><strong>Mesa</strong>${pad.mesa||"—"}</div>
+            <div class="info-chip"><strong>Orden</strong>${pad.orden||"—"}</div>
+            <div class="info-chip"><strong>Local</strong>${(pad.local||"—").substring(0,30)}</div>
+            <div class="info-chip"><strong>Dirección</strong>${(pad.direccion||"—").substring(0,40)}</div>
+          ` : `<div class="info-chip"><strong>CI</strong>${formatCI(ci)}</div>`}
+        </div>
+        ${contenido}
+      </div>`;
+
+    document.getElementById("modal").classList.remove("hidden");
+
+    // Cargar datos del padrón si no los tenemos
+    if (!pad) {
+      DB.ref(`padron/${ci}`).get().then(s=>{
+        if(s.exists()){ padronLocal[ci]=s.val(); this.abrirPersona(ci); }
+      });
+    }
+  },
+
+  cerrarModal() {
+    document.getElementById("modal").classList.add("hidden");
+  },
+
+  previewFoto(input, ci) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = document.getElementById("foto-prev-"+ci);
+      if (img) { img.src=e.target.result; img.style.display="block"; }
+    };
+    reader.readAsDataURL(file);
+  },
+
+  // ── CONFIRMAR VOTO ──
+  async confirmarVoto(ci) {
+    const btn  = document.getElementById("btn-confirmar-"+ci);
+    const file = document.getElementById("foto-inp-"+ci)?.files[0];
+
+    if (!file) {
+      alert("📷 Necesitás sacar una foto de la mesa antes de confirmar.");
+      return;
+    }
+
+    btn.disabled=true; btn.textContent="Guardando...";
+
+    try {
+      let fotoURL = null;
+      // Subir foto
+      const ref = STORAGE.ref(`fotos_brigada/${ci}/${Date.now()}_${miNombre.replace(/\s/g,"_")}.jpg`);
+      await ref.put(file);
+      fotoURL = await ref.getDownloadURL();
+
+      // Actualizar estado
+      const updates = {};
+      updates[`estados/${ci}/atendido_brigada`]     = true;
+      updates[`estados/${ci}/atendido_brigada_por`] = miNombre;
+      updates[`estados/${ci}/timestamp_brigada`]    = Date.now();
+      updates[`estados/${ci}/brigada_codigo`]        = miCodigo;
+      if (fotoURL) {
+        updates[`estados/${ci}/fotos_brigada/${Date.now()}`] = {
+          url: fotoURL, por: miNombre, ts: Date.now()
+        };
+      }
+
+      await DB.ref().update(updates);
+      this.cerrarModal();
+
+    } catch(e) {
+      alert("Error: "+e.message);
+      btn.disabled=false;
+      btn.textContent="✅ Confirmar que votó + subir foto";
+    }
+  },
+
+  async desmarcarBrigada(ci) {
+    if (!confirm("¿Deshacer la confirmación de esta persona?")) return;
+    await DB.ref(`estados/${ci}/atendido_brigada`).remove();
+    await DB.ref(`estados/${ci}/atendido_brigada_por`).remove();
+    await DB.ref(`estados/${ci}/timestamp_brigada`).remove();
+    this.cerrarModal();
+  }
+};
+
+// Cerrar modal al tocar fuera
+document.getElementById("modal").addEventListener("click", e => {
+  if (e.target.id==="modal") APP.cerrarModal();
+});
+
+// Restaurar sesión
+(function(){
+  const saved = sessionStorage.getItem("brigada");
+  if (saved) {
+    try {
+      const d = JSON.parse(saved);
+      miColor=d.miColor; miNombre=d.miNombre; miCodigo=d.miCodigo;
+      initFB();
+      APP.setupUI();
+      APP.listenEstados();
+    } catch(e) { sessionStorage.removeItem("brigada"); }
+  }
+})();
+
+// Input código en mayúsculas
+document.getElementById("li-codigo").addEventListener("input", function(){
+  this.value = this.value.toUpperCase();
+});
+document.getElementById("li-pass-code")?.addEventListener("keydown", e=>{
+  if(e.key==="Enter") APP.login();
+});
+</script>
+</body>
+</html>
