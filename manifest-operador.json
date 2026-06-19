@@ -1,9 +1,10 @@
 {
+  "id": "./index-bypass-v2.html",
   "name": "Padrón 339 — Coronel Oviedo",
   "short_name": "Padrón 339",
   "description": "Sistema de monitoreo del padrón electoral — Seccional N° 339, Coronel Oviedo",
   "start_url": "./index-bypass-v2.html",
-  "scope": "./",
+  "scope": "./index-bypass-v2.html",
   "display": "standalone",
   "background_color": "#0b0f1a",
   "theme_color": "#1e3a8a",
