@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Padrón 339">
+<meta name="theme-color" content="#1e3a8a">
+<link rel="manifest" href="manifest-operador.json">
+<link rel="icon" href="icon-operador-192.png">
+<link rel="apple-touch-icon" href="icon-operador-192.png">
 <title>Padrón 339 — Coronel Oviedo</title>
 
 <!-- Firebase SDKs -->
@@ -1486,6 +1492,7 @@ María Ruiz, maria@gmail.com, , admin"></textarea></div>
     const lineas = raw.split("\n").map(l=>l.trim()).filter(Boolean);
     log.innerHTML = "";
     let ok=0, fail=0;
+    const errores = [];
 
     for (const linea of lineas) {
       const partes = linea.split(",").map(s=>s.trim());
@@ -1503,11 +1510,17 @@ María Ruiz, maria@gmail.com, , admin"></textarea></div>
         log.innerHTML += `<div style="color:var(--success)">✅ ${nombre} → ${esAdmin?"Admin":(GRUPOS[grupo]?.label||"sin grupo")}</div>`;
         ok++;
       } catch(e) {
-        log.innerHTML += `<div style="color:var(--danger)">❌ ${nombre} (${email}): ${e.message}</div>`;
+        const detalle = `${e.code ? "["+e.code+"] " : ""}${e.message}`;
+        log.innerHTML += `<div style="color:var(--danger)">❌ ${nombre} (${email}): ${detalle}</div>`;
+        errores.push(`${nombre} (${email}):\n${detalle}`);
         fail++;
       }
     }
-    toast(`Listo: ${ok} creados, ${fail} con error`, fail?"warn":"ok", 4000);
+    if (errores.length) {
+      alert("Hubo errores al crear cuentas:\n\n" + errores.join("\n\n"));
+    } else {
+      toast(`✔ ${ok} operador(es) creado(s)`, "ok", 4000);
+    }
     document.getElementById("nu-bulk").value="";
     this.renderAdmin();
   },
