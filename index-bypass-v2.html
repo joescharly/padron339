@@ -1274,6 +1274,13 @@ const APP = {
     const atendidos = estados.filter(e=>e.confirmado).length;
     const pct = total > 0 ? Math.round(marcados/total*100) : 0;
 
+    // Doble control: mesa vs operador/brigada
+    const estadosConCi = Object.entries(estadosLocal).map(([ci,e])=>({ci,...e}));
+    const votadosMesa = estadosConCi.filter(e=>e.votado_mesa);
+    const soloMesa     = votadosMesa.filter(e=>!e.confirmado);          // mesa dice que votó, pero operador/brigada no lo tienen
+    const soloOpBrig    = estadosConCi.filter(e=>e.confirmado && !e.votado_mesa); // operador/brigada confirmaron, mesa no lo registró
+    const coinciden     = votadosMesa.filter(e=>e.confirmado).length;
+
     // Conteo por color
     const porColor = {};
     Object.keys(GRUPOS).forEach(k => porColor[k]=0);
@@ -1337,6 +1344,44 @@ const APP = {
             </div>`;
         }).join("")}
       </div>
+
+      <!-- Doble control: Mesa vs Operador/Brigada -->
+      ${currentUD?.esAdmin ? `
+      <div class="section-title">🔍 Doble control — Mesa vs Operador/Brigada</div>
+      <div class="stat-grid" style="margin-bottom:16px">
+        <div class="stat-card">
+          <div class="val" style="color:#0f766e">${votadosMesa.length.toLocaleString()}</div>
+          <div class="lbl">Votaron (mesa)</div>
+        </div>
+        <div class="stat-card">
+          <div class="val" style="color:var(--success)">${coinciden.toLocaleString()}</div>
+          <div class="lbl">Coinciden</div>
+          <div class="sub">Mesa y Operador/Brigada de acuerdo</div>
+        </div>
+        <div class="stat-card">
+          <div class="val" style="color:var(--danger)">${(soloMesa.length+soloOpBrig.length).toLocaleString()}</div>
+          <div class="lbl">Discrepancias</div>
+          <div class="sub">${soloMesa.length} solo mesa · ${soloOpBrig.length} solo op/brig</div>
+        </div>
+      </div>
+      ${(soloMesa.length+soloOpBrig.length) > 0 ? `
+      <div class="admin-section" style="margin-bottom:16px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">
+          Primeros casos para revisar (CI, nombre, qué falta):
+        </div>
+        ${[...soloMesa.slice(0,10).map(e=>({...e,tipo:"⚠️ Mesa dice que votó, falta confirmar en Operador/Brigada"})),
+           ...soloOpBrig.slice(0,10).map(e=>({...e,tipo:"⚠️ Operador/Brigada confirmó, falta registrar en Mesa"}))]
+          .slice(0,15).map(e=>{
+            const p3 = padronLocal.find(x=>String(x.ci)===String(e.ci));
+            return `<div class="activity-item">
+              <div class="activity-text">
+                <strong>CI ${e.ci}</strong> — ${p3?p3.apellido+", "+p3.nombre:"?"}
+                <div style="font-size:11px;color:var(--warning);margin-top:2px">${e.tipo}</div>
+              </div>
+            </div>`;
+          }).join("")}
+      </div>` : ""}
+      ` : ""}
 
       <!-- Por mesa -->
       <div class="section-title">Por mesa de votación</div>

@@ -1,0 +1,16 @@
+{
+  "id": "./mesa.html",
+  "name": "App Mesa — Padrón 339",
+  "short_name": "Mesa 339",
+  "description": "Control de votación por mesa — Seccional N° 339, Coronel Oviedo",
+  "start_url": "./mesa.html",
+  "scope": "./mesa.html",
+  "display": "standalone",
+  "background_color": "#0b0f1a",
+  "theme_color": "#0f766e",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "icon-mesa-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-mesa-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
