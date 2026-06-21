@@ -223,6 +223,27 @@ function timeAgo(ts){
   return new Date(ts).toLocaleString("es-PY");
 }
 
+// El campo "mesa" puede llamarse distinto según cómo se extrajo el padrón.
+// Probamos las variantes más comunes y usamos la primera que tenga datos.
+const MESA_CANDIDATOS = ["mesa","Mesa","MESA","nro_mesa","nroMesa","numero_mesa",
+  "numeroMesa","mesa_nro","mesaNro","mesaVotacion","mesa_votacion","local_mesa","nroMesaActa"];
+
+function detectarCampoMesa(persona){
+  for(const campo of MESA_CANDIDATOS){
+    if(persona[campo]!==undefined && persona[campo]!==null && String(persona[campo]).trim()!==""){
+      return campo;
+    }
+  }
+  return null;
+}
+
+function getMesa(persona, campoDetectado){
+  if(campoDetectado && persona[campoDetectado]!==undefined) return String(persona[campoDetectado]).trim();
+  // Fallback: probar todas las variantes por si el campo varía registro a registro
+  const c = detectarCampoMesa(persona);
+  return c ? String(persona[c]).trim() : "";
+}
+
 const ADMIN = {
 
   async conectar(){
@@ -392,16 +413,51 @@ const ADMIN = {
       const personas = Object.values(snap.val());
       log("escaneo-log", `📋 ${personas.length.toLocaleString()} personas leídas. Agrupando por mesa...`);
 
+      // Detectar automáticamente cómo se llama el campo de mesa en estos datos
+      const campoMesa = detectarCampoMesa(personas[0]);
+      if (!campoMesa) {
+        log("escaneo-log", "❌ No encontré ningún campo de mesa reconocible en el primer registro.");
+        log("escaneo-log", "📋 Campos disponibles: " + Object.keys(personas[0]).join(", "));
+        log("escaneo-log", "Mandale esa lista al desarrollador para agregar el campo correcto.");
+        btn.disabled=false; btn.textContent="🔍 Escanear padrón y preparar mesas";
+        return;
+      }
+      log("escaneo-log", `✓ Campo de mesa detectado: "${campoMesa}"`);
+
       const porMesa = {};
+      let sinMesa = 0;
       personas.forEach(p => {
-        const m = String(p.mesa||"").trim();
-        if (!m) return;
+        const m = getMesa(p, campoMesa);
+        if (!m) { sinMesa++; return; }
         if (!porMesa[m]) porMesa[m] = {};
-        porMesa[m][p.ci] = p;
+        // Guardamos el registro con un campo "mesa" ya normalizado, así
+        // mesa.html y las demás apps lo encuentran siempre en el mismo lugar.
+        porMesa[m][p.ci] = { ...p, mesa: m };
       });
+      if (sinMesa > 0) log("escaneo-log", `⚠️ ${sinMesa.toLocaleString()} personas sin mesa asignada (se omiten).`);
 
       const mesas = Object.keys(porMesa).sort((a,b)=>Number(a)-Number(b));
       mesasDetectadas = mesas.map(m => ({mesa:m, cantidad:Object.keys(porMesa[m]).length}));
+
+      // Si el campo no se llamaba exactamente "mesa", corregimos el padrón
+      // directamente, así el operador y la brigada también lo ven bien.
+      if (campoMesa !== "mesa") {
+        log("escaneo-log", `🔧 El campo se llamaba "${campoMesa}", no "mesa". Corrigiendo el padrón...`);
+        const porCi = {};
+        personas.forEach(p => { porCi[p.ci] = p; });
+        const ids = personas.filter(p=>getMesa(p,campoMesa)).map(p=>p.ci);
+        const LOTE = 1500;
+        for (let i=0; i<ids.length; i+=LOTE) {
+          const lote = ids.slice(i, i+LOTE);
+          const updates = {};
+          lote.forEach(ci => {
+            updates[`padron/${ci}/mesa`] = getMesa(porCi[ci], campoMesa);
+          });
+          await DB.ref().update(updates);
+          log("escaneo-log", `   corregidas ${Math.min(i+LOTE,ids.length)}/${ids.length} personas...`);
+        }
+        log("escaneo-log", "✓ Padrón corregido.");
+      }
 
       log("escaneo-log", `🧩 ${mesas.length} mesas detectadas. Guardando índice...`);
 
