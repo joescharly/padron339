@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin — Códigos</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  background:#0d1117;color:#e6e9f0;padding:16px;max-width:600px;margin:0 auto}
+h1{font-size:20px;font-weight:800;margin-bottom:4px}
+p.sub{font-size:13px;color:#7a84a0;margin-bottom:16px;line-height:1.6}
+.card{background:#161b27;border:1px solid #2a3147;border-radius:12px;padding:18px;margin-bottom:14px}
+.card h2{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#7a84a0;margin-bottom:12px}
+.field label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.07em;color:#7a84a0;margin-bottom:4px}
+.field input,.field select{width:100%;background:#1e2436;border:1px solid #2a3147;
+  border-radius:8px;padding:10px 13px;color:#e6e9f0;font-size:14px;outline:none;margin-bottom:10px}
+.field input:focus,.field select:focus{border-color:#3d7eff}
+.btn{display:flex;align-items:center;justify-content:center;gap:6px;border:none;
+  border-radius:8px;padding:11px 16px;font-size:14px;font-weight:700;cursor:pointer;
+  font-family:inherit;transition:filter .15s;margin-bottom:8px}
+.btn:hover{filter:brightness(1.1)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-blue{background:#3d7eff;color:#fff;width:100%}
+.btn-green{background:#3ecf70;color:#051a0c;width:100%}
+.btn-teal{background:#0f766e;color:#fff;width:100%}
+.btn-sm{width:auto;padding:6px 12px;font-size:12px}
+.codigo-row{display:flex;align-items:center;gap:8px;background:#1e2436;
+  border:1px solid #2a3147;border-radius:8px;padding:12px 14px;margin-bottom:8px}
+.codigo-color{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.codigo-text{flex:1}
+.codigo-key{font-size:14px;font-weight:800;font-family:monospace;letter-spacing:.08em}
+.codigo-info{font-size:11px;color:#7a84a0;margin-top:2px}
+.btn-copy{background:#2a3147;border:none;color:#7a84a0;border-radius:6px;
+  padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;flex-shrink:0}
+.btn-copy:hover{color:#e6e9f0}
+.btn-del{background:transparent;border:1px solid #e05555;color:#e05555;border-radius:6px;
+  padding:5px 8px;font-size:12px;cursor:pointer;flex-shrink:0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:#1e2436;border-radius:8px;padding:12px;text-align:center}
+.stat .val{font-size:24px;font-weight:800;color:#3d7eff}
+.stat .lbl{font-size:11px;color:#7a84a0;margin-top:2px;text-transform:uppercase}
+.log{background:#0d1117;border:1px solid #2a3147;border-radius:8px;padding:10px;
+  font-size:11px;font-family:monospace;max-height:160px;overflow-y:auto;color:#3ecf70;margin-top:8px}
+.color-preview{width:16px;height:16px;border-radius:50%;display:inline-block;vertical-align:middle;margin-right:6px}
+.accesos-item{font-size:12px;padding:6px 0;border-bottom:1px solid #2a3147;color:#7a84a0}
+.accesos-item strong{color:#e6e9f0}
+.url-box{background:#1e2436;border:1px solid #2a3147;border-radius:8px;padding:10px 12px;
+  font-family:monospace;font-size:12px;color:#3d7eff;word-break:break-all;margin-bottom:8px}
+.tabs2{display:flex;gap:8px;margin-bottom:16px}
+.tab2{flex:1;text-align:center;padding:10px;border-radius:8px;background:#161b27;
+  border:1px solid #2a3147;font-weight:700;font-size:13px;cursor:pointer;color:#7a84a0}
+.tab2.active{background:#1e2436;border-color:#3d7eff;color:#e6e9f0}
+.progress-bar{background:#1e2436;border-radius:20px;height:8px;overflow:hidden;margin:8px 0}
+.progress-fill{height:100%;background:#0f766e;width:0%;transition:width .2s}
+</style>
+</head>
+<body>
+
+<h1>⚙️ Admin — Códigos de Acceso</h1>
+<p class="sub">Generá y gestioná los códigos de acceso para brigadistas y encargados de mesa.</p>
+
+<!-- LOGIN -->
+<div class="card" id="card-login">
+  <h2>🔐 Acceso Admin</h2>
+  <div class="field">
+    <label>Contraseña</label>
+    <input type="password" id="pass" placeholder="Tu contraseña de Firebase"/>
+  </div>
+  <button class="btn btn-blue" onclick="ADMIN.conectar()">Conectar</button>
+  <p id="login-st" style="font-size:13px;color:#7a84a0;margin-top:6px"></p>
+</div>
+
+<div id="post-login" style="display:none">
+
+<div class="tabs2">
+  <div class="tab2 active" id="tab2-brigada" onclick="ADMIN.cambiarTab('brigada')">🚶 Brigada</div>
+  <div class="tab2" id="tab2-mesa" onclick="ADMIN.cambiarTab('mesa')">🗳️ Mesa</div>
+</div>
+
+<!-- ═══════════ SECCIÓN BRIGADA ═══════════ -->
+<div id="seccion-brigada">
+
+  <div class="card">
+    <h2>📱 URL para brigadistas</h2>
+    <p style="font-size:13px;color:#7a84a0;margin-bottom:8px">Compartí esta URL con todos los brigadistas:</p>
+    <div class="url-box">https://joescharly.github.io/padron339/brigada.html</div>
+    <button class="btn btn-sm btn-blue" onclick="ADMIN.copiarURL('brigada.html')">📋 Copiar URL</button>
+  </div>
+
+  <div class="card">
+    <h2>➕ Generar nuevo código</h2>
+    <div class="grid2">
+      <div class="field">
+        <label>Color de brigada</label>
+        <select id="gen-color">
+          <option value="amarillo">🟡 Amarillo</option>
+          <option value="azul">🔵 Azul</option>
+          <option value="verde">🟢 Verde</option>
+          <option value="rojo">🔴 Rojo</option>
+          <option value="naranja">🟠 Naranja</option>
+          <option value="violeta">🟣 Violeta</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Descripción (opcional)</label>
+        <input type="text" id="gen-desc" placeholder="Ej: Sector Norte"/>
+      </div>
+    </div>
+    <div class="field">
+      <label>Código personalizado (dejar vacío para generar automático)</label>
+      <input type="text" id="gen-codigo" placeholder="Ej: AMARILLO-NORTE-2026" 
+             style="text-transform:uppercase;letter-spacing:.08em;font-family:monospace"/>
+    </div>
+    <button class="btn btn-green" onclick="ADMIN.generarCodigo()">✅ Generar código</button>
+    <div class="log" id="gen-log">Esperando...</div>
+  </div>
+
+  <div class="card">
+    <h2>🔑 Códigos activos</h2>
+    <div class="grid2" style="margin-bottom:12px">
+      <div class="stat"><div class="val" id="st-codigos">0</div><div class="lbl">Códigos</div></div>
+      <div class="stat"><div class="val" id="st-accesos">0</div><div class="lbl">Accesos</div></div>
+    </div>
+    <div id="codigos-list">Cargando...</div>
+  </div>
+
+  <div class="card">
+    <h2>👥 Últimos accesos de brigadistas</h2>
+    <div id="accesos-list">Sin accesos aún.</div>
+  </div>
+
+</div>
+
+<!-- ═══════════ SECCIÓN MESA ═══════════ -->
+<div id="seccion-mesa" style="display:none">
+
+  <div class="card">
+    <h2>📱 URL para encargados de mesa</h2>
+    <p style="font-size:13px;color:#7a84a0;margin-bottom:8px">Compartí esta URL con los encargados de mesa:</p>
+    <div class="url-box">https://joescharly.github.io/padron339/mesa.html</div>
+    <button class="btn btn-sm btn-blue" onclick="ADMIN.copiarURL('mesa.html')">📋 Copiar URL</button>
+  </div>
+
+  <div class="card">
+    <h2>🧩 Paso 1 — Preparar las mesas</h2>
+    <p style="font-size:13px;color:#7a84a0;margin-bottom:10px">
+      Esto lee todo el padrón una vez y arma, para cada mesa, su propia lista de votantes
+      (así cada encargado de mesa solo descarga su mesa, no el padrón completo).
+      Hacelo cuando subas el padrón por primera vez, o si lo actualizás.
+    </p>
+    <button class="btn btn-teal" id="btn-escanear" onclick="ADMIN.escanearMesas()">🔍 Escanear padrón y preparar mesas</button>
+    <div class="progress-bar"><div class="progress-fill" id="escaneo-progress"></div></div>
+    <div class="log" id="escaneo-log">Esperando...</div>
+  </div>
+
+  <div class="card">
+    <h2>➕ Paso 2 — Generar códigos</h2>
+    <p style="font-size:13px;color:#7a84a0;margin-bottom:10px">
+      Generá un código distinto para cada mesa detectada (las que todavía no tienen código).
+    </p>
+    <button class="btn btn-green" onclick="ADMIN.generarCodigosMesa()">✅ Generar códigos para las mesas nuevas</button>
+    <div class="log" id="gen-mesa-log">Esperando...</div>
+  </div>
+
+  <div class="card">
+    <h2>🔑 Códigos de mesa activos</h2>
+    <div class="grid2" style="margin-bottom:12px">
+      <div class="stat"><div class="val" id="st-codigos-mesa">0</div><div class="lbl">Códigos</div></div>
+      <div class="stat"><div class="val" id="st-accesos-mesa">0</div><div class="lbl">Accesos</div></div>
+    </div>
+    <button class="btn btn-sm btn-blue" style="width:100%;margin-bottom:10px" onclick="ADMIN.exportarCodigosMesa()">⬇️ Descargar lista (CSV) para imprimir</button>
+    <div id="codigos-mesa-list">Cargando...</div>
+  </div>
+
+  <div class="card">
+    <h2>👥 Últimos accesos de mesa</h2>
+    <div id="accesos-mesa-list">Sin accesos aún.</div>
+  </div>
+
+</div>
+
+</div>
+
+<script>
+const FB_CONFIG = {
+  apiKey:"AIzaSyA_HCHx76CBrYH8sOBMrosos7ln5UgwgqI",
+  authDomain:"padron-339.firebaseapp.com",
+  databaseURL:"https://padron-339-default-rtdb.firebaseio.com",
+  projectId:"padron-339",
+  storageBucket:"padron-339.firebasestorage.app",
+  messagingSenderId:"556732839087",
+  appId:"1:556732839087:web:c6234e38868861c8f3505a"
+};
+
+const GRUPOS = {
+  amarillo:{label:"Amarillo",bg:"#FFD600",tx:"#1a1400"},
+  azul:    {label:"Azul",    bg:"#1a56db",tx:"#ffffff"},
+  verde:   {label:"Verde",   bg:"#1e8a3e",tx:"#ffffff"},
+  rojo:    {label:"Rojo",    bg:"#c82020",tx:"#ffffff"},
+  naranja: {label:"Naranja", bg:"#d9620a",tx:"#ffffff"},
+  violeta: {label:"Violeta", bg:"#7c3aed",tx:"#ffffff"},
+};
+
+let DB, AUTH;
+let mesasDetectadas = []; // [{mesa, cantidad}]
+
+function log(id, msg){
+  const el=document.getElementById(id);
+  const ts=new Date().toLocaleTimeString("es-PY");
+  el.textContent=`[${ts}] ${msg}\n`+el.textContent;
+}
+
+function timeAgo(ts){
+  if(!ts) return "";
+  const d=Math.floor((Date.now()-ts)/1000);
+  if(d<60) return "hace "+d+"s";
+  if(d<3600) return "hace "+Math.floor(d/60)+"m";
+  return new Date(ts).toLocaleString("es-PY");
+}
+
+// El campo "mesa" puede llamarse distinto según cómo se extrajo el padrón.
+// Probamos las variantes más comunes y usamos la primera que tenga datos.
+const MESA_CANDIDATOS = ["mesa","Mesa","MESA","nro_mesa","nroMesa","numero_mesa",
+  "numeroMesa","mesa_nro","mesaNro","mesaVotacion","mesa_votacion","local_mesa","nroMesaActa"];
+
+function detectarCampoMesa(personas){
+  // Revisamos varios registros (no solo el primero) por si alguno viene vacío
+  const muestra = personas.slice(0, Math.min(200, personas.length));
+  for(const campo of MESA_CANDIDATOS){
+    const tieneDatos = muestra.some(p =>
+      p[campo]!==undefined && p[campo]!==null && String(p[campo]).trim()!=="");
+    if(tieneDatos) return campo;
+  }
+  return null;
+}
+
+function getMesa(persona, campoDetectado){
+  if(!campoDetectado || persona[campoDetectado]===undefined || persona[campoDetectado]===null) return "";
+  return String(persona[campoDetectado]).trim();
+}
+
+const ADMIN = {
+
+  async conectar(){
+    const pass=document.getElementById("pass").value;
+    const st=document.getElementById("login-st");
+    st.textContent="Conectando...";
+    try{
+      if(!firebase.apps.length) firebase.initializeApp(FB_CONFIG);
+      DB=firebase.database(); AUTH=firebase.auth();
+      await AUTH.signInWithEmailAndPassword("carlosprieto15041996@gmail.com",pass);
+      st.textContent="✅ Conectado";
+      st.style.color="#3ecf70";
+      document.getElementById("card-login").style.display="none";
+      document.getElementById("post-login").style.display="block";
+      this.cargarCodigos();
+      this.cargarAccesos();
+      this.cargarCodigosMesa();
+      this.cargarAccesosMesa();
+    }catch(e){
+      st.textContent="❌ "+e.message;
+      st.style.color="#e05555";
+    }
+  },
+
+  cambiarTab(tab){
+    document.getElementById("tab2-brigada").classList.toggle("active", tab==="brigada");
+    document.getElementById("tab2-mesa").classList.toggle("active", tab==="mesa");
+    document.getElementById("seccion-brigada").style.display = tab==="brigada"?"block":"none";
+    document.getElementById("seccion-mesa").style.display    = tab==="mesa"?"block":"none";
+  },
+
+  // ═══════ BRIGADA ═══════
+
+  generarCodigoAleatorio(color){
+    const adj=["NORTE","SUR","ESTE","OESTE","CENTRO","ALFA","BETA","DELTA","OMEGA","SIGMA"];
+    const num=Math.floor(Math.random()*900+100);
+    return `${color.toUpperCase()}-${adj[Math.floor(Math.random()*adj.length)]}-${num}`;
+  },
+
+  async generarCodigo(){
+    const color=document.getElementById("gen-color").value;
+    const desc =document.getElementById("gen-desc").value.trim();
+    let codigo =document.getElementById("gen-codigo").value.trim().toUpperCase().replace(/\s/g,"-");
+    
+    if(!codigo) codigo=this.generarCodigoAleatorio(color);
+    
+    const snap=await DB.ref(`codigos_brigada/${codigo}`).get();
+    if(snap.exists()){
+      log("gen-log","❌ El código '"+codigo+"' ya existe. Elegí otro.");
+      return;
+    }
+
+    await DB.ref(`codigos_brigada/${codigo}`).set({
+      color, descripcion:desc||"", creado:Date.now(), activo:true
+    });
+
+    log("gen-log",`✅ Código creado: ${codigo} → ${GRUPOS[color].label}`);
+    document.getElementById("gen-codigo").value="";
+    document.getElementById("gen-desc").value="";
+    
+    try{
+      await navigator.clipboard.writeText(codigo);
+      log("gen-log",`📋 Copiado al portapapeles: ${codigo}`);
+    }catch(e){}
+    
+    this.cargarCodigos();
+  },
+
+  async cargarCodigos(){
+    const snap=await DB.ref("codigos_brigada").get();
+    const el=document.getElementById("codigos-list");
+    
+    if(!snap.exists()){
+      el.innerHTML="<p style='color:#7a84a0;font-size:13px'>No hay códigos aún.</p>";
+      document.getElementById("st-codigos").textContent="0";
+      return;
+    }
+
+    const codigos=snap.val();
+    const keys=Object.keys(codigos).sort();
+    document.getElementById("st-codigos").textContent=keys.length;
+
+    el.innerHTML=keys.map(k=>{
+      const c=codigos[k];
+      const g=GRUPOS[c.color]||{bg:"#888",label:c.color};
+      return `
+        <div class="codigo-row">
+          <div class="codigo-color" style="background:${g.bg}"></div>
+          <div class="codigo-text">
+            <div class="codigo-key">${k}</div>
+            <div class="codigo-info">${g.label}${c.descripcion?" · "+c.descripcion:""} · ${timeAgo(c.creado)}</div>
+          </div>
+          <button class="btn-copy" onclick="ADMIN.copiar('${k}')">📋</button>
+          <button class="btn-del" onclick="ADMIN.eliminar('${k}')">🗑</button>
+        </div>`;
+    }).join("");
+  },
+
+  async cargarAccesos(){
+    DB.ref("brigada_accesos").on("value", snap=>{
+      const el=document.getElementById("accesos-list");
+      if(!snap.exists()){
+        el.innerHTML="<p style='color:#7a84a0;font-size:13px'>Sin accesos aún.</p>";
+        document.getElementById("st-accesos").textContent="0";
+        return;
+      }
+
+      let todos=[];
+      snap.forEach(codigoSnap=>{
+        const codigo=codigoSnap.key;
+        codigoSnap.forEach(accSnap=>{
+          const a=accSnap.val();
+          if(a) todos.push({...a,codigo});
+        });
+      });
+
+      todos.sort((a,b)=>(b.timestamp||0)-(a.timestamp||0));
+      document.getElementById("st-accesos").textContent=todos.length;
+
+      el.innerHTML=todos.slice(0,20).map(a=>{
+        const g=GRUPOS[a.color]||{bg:"#888",label:a.color};
+        return `<div class="accesos-item">
+          <span class="color-preview" style="background:${g.bg}"></span>
+          <strong>${a.nombre||"?"}</strong>
+          <span style="font-size:11px;margin-left:4px">[${a.codigo}]</span>
+          · ${timeAgo(a.timestamp)}
+        </div>`;
+      }).join("");
+    });
+  },
+
+  async copiar(codigo){
+    try{
+      await navigator.clipboard.writeText(codigo);
+      alert("✅ Copiado: "+codigo);
+    }catch(e){ alert("Código: "+codigo); }
+  },
+
+  async eliminar(codigo){
+    if(!confirm(`¿Eliminar el código "${codigo}"? Los brigadistas con este código ya no podrán ingresar.`)) return;
+    await DB.ref(`codigos_brigada/${codigo}`).remove();
+    log("gen-log","🗑 Código eliminado: "+codigo);
+    this.cargarCodigos();
+  },
+
+  copiarURL(archivo){
+    const url="https://joescharly.github.io/padron339/"+archivo;
+    navigator.clipboard.writeText(url).then(()=>alert("✅ URL copiada")).catch(()=>alert("URL: "+url));
+  },
+
+  // ═══════ MESA ═══════
+
+  async escanearMesas(){
+    const btn = document.getElementById("btn-escanear");
+    const bar = document.getElementById("escaneo-progress");
+    btn.disabled = true;
+    btn.textContent = "⏳ Leyendo padrón...";
+    log("escaneo-log", "Descargando el padrón completo, puede tardar un poco...");
+
+    try {
+      const snap = await DB.ref("padron").get();
+      if (!snap.exists()) {
+        log("escaneo-log", "❌ No hay padrón cargado todavía.");
+        btn.disabled=false; btn.textContent="🔍 Escanear padrón y preparar mesas";
+        return;
+      }
+      const personas = Object.values(snap.val());
+      log("escaneo-log", `📋 ${personas.length.toLocaleString()} personas leídas. Agrupando por mesa...`);
+
+      // Detectar automáticamente cómo se llama el campo de mesa en estos datos
+      const campoMesa = detectarCampoMesa(personas);
+      if (!campoMesa) {
+        log("escaneo-log", "❌ No encontré ningún campo de mesa con datos en una muestra de 200 personas.");
+        log("escaneo-log", "📋 Campos disponibles: " + JSON.stringify(Object.keys(personas[0])));
+        log("escaneo-log", "🔬 Registro 1 completo: " + JSON.stringify(personas[0]));
+        log("escaneo-log", "🔬 Registro 2 completo: " + JSON.stringify(personas[1]));
+        log("escaneo-log", "🔬 Registro 50 completo: " + JSON.stringify(personas[50]));
+        log("escaneo-log", "Mandale esa lista al desarrollador para revisar el campo correcto.");
+        btn.disabled=false; btn.textContent="🔍 Escanear padrón y preparar mesas";
+        return;
+      }
+      log("escaneo-log", `✓ Campo de mesa detectado: "${campoMesa}"`);
+
+      const porMesa = {};
+      let sinMesa = 0;
+      personas.forEach(p => {
+        const m = getMesa(p, campoMesa);
+        if (!m) { sinMesa++; return; }
+        if (!porMesa[m]) porMesa[m] = {};
+        // Guardamos el registro con un campo "mesa" ya normalizado, así
+        // mesa.html y las demás apps lo encuentran siempre en el mismo lugar.
+        porMesa[m][p.ci] = { ...p, mesa: m };
+      });
+      if (sinMesa > 0) log("escaneo-log", `⚠️ ${sinMesa.toLocaleString()} personas sin mesa asignada (se omiten).`);
+
+      const mesas = Object.keys(porMesa).sort((a,b)=>Number(a)-Number(b));
+      mesasDetectadas = mesas.map(m => ({mesa:m, cantidad:Object.keys(porMesa[m]).length}));
+
+      // Si el campo no se llamaba exactamente "mesa", corregimos el padrón
+      // directamente, así el operador y la brigada también lo ven bien.
+      if (campoMesa !== "mesa") {
+        log("escaneo-log", `🔧 El campo se llamaba "${campoMesa}", no "mesa". Corrigiendo el padrón...`);
+        const porCi = {};
+        personas.forEach(p => { porCi[p.ci] = p; });
+        const ids = personas.filter(p=>getMesa(p,campoMesa)).map(p=>p.ci);
+        const LOTE = 1500;
+        for (let i=0; i<ids.length; i+=LOTE) {
+          const lote = ids.slice(i, i+LOTE);
+          const updates = {};
+          lote.forEach(ci => {
+            updates[`padron/${ci}/mesa`] = getMesa(porCi[ci], campoMesa);
+          });
+          await DB.ref().update(updates);
+          log("escaneo-log", `   corregidas ${Math.min(i+LOTE,ids.length)}/${ids.length} personas...`);
+        }
+        log("escaneo-log", "✓ Padrón corregido.");
+      }
+
+      log("escaneo-log", `🧩 ${mesas.length} mesas detectadas. Guardando índice...`);
+
+      let hechas = 0;
+      for (const m of mesas) {
+        await DB.ref(`mesa_index/${m}`).set(porMesa[m]);
+        hechas++;
+        bar.style.width = Math.round(hechas/mesas.length*100)+"%";
+        if (hechas % 10 === 0 || hechas === mesas.length) {
+          log("escaneo-log", `   guardadas ${hechas}/${mesas.length} mesas...`);
+        }
+      }
+
+      log("escaneo-log", `✅ Listo. ${mesas.length} mesas preparadas, ${personas.length.toLocaleString()} personas indexadas.`);
+      btn.disabled=false; btn.textContent="🔍 Volver a escanear";
+
+    } catch(e) {
+      log("escaneo-log", "❌ Error: "+e.message);
+      btn.disabled=false; btn.textContent="🔍 Escanear padrón y preparar mesas";
+    }
+  },
+
+  async generarCodigosMesa(){
+    if (mesasDetectadas.length===0) {
+      const snap = await DB.ref("mesa_index").get();
+      if (!snap.exists()) {
+        log("gen-mesa-log","❌ Primero hacé el Paso 1 (Escanear padrón).");
+        return;
+      }
+      mesasDetectadas = Object.keys(snap.val()).map(m => ({mesa:m}));
+    }
+
+    const existentes = await DB.ref("codigos_mesa").get();
+    const yaExiste = {};
+    if (existentes.exists()) {
+      Object.values(existentes.val()).forEach(c => { yaExiste[c.mesa] = true; });
+    }
+
+    let creados=0, saltados=0;
+    for (const {mesa} of mesasDetectadas) {
+      if (yaExiste[mesa]) { saltados++; continue; }
+      const codigo = `MESA${mesa}-2026`;
+      await DB.ref(`codigos_mesa/${codigo}`).set({
+        mesa, creado: Date.now(), activo: true
+      });
+      creados++;
+    }
+
+    log("gen-mesa-log", `✅ ${creados} código(s) nuevo(s) creado(s). ${saltados} mesa(s) ya tenían código.`);
+    this.cargarCodigosMesa();
+  },
+
+  async cargarCodigosMesa(){
+    const snap=await DB.ref("codigos_mesa").get();
+    const el=document.getElementById("codigos-mesa-list");
+    
+    if(!snap.exists()){
+      el.innerHTML="<p style='color:#7a84a0;font-size:13px'>No hay códigos de mesa aún.</p>";
+      document.getElementById("st-codigos-mesa").textContent="0";
+      return;
+    }
+
+    const codigos=snap.val();
+    const keys=Object.keys(codigos).sort((a,b)=>Number(codigos[a].mesa)-Number(codigos[b].mesa));
+    document.getElementById("st-codigos-mesa").textContent=keys.length;
+
+    el.innerHTML=keys.map(k=>{
+      const c=codigos[k];
+      return `
+        <div class="codigo-row">
+          <div class="codigo-color" style="background:#0f766e"></div>
+          <div class="codigo-text">
+            <div class="codigo-key">${k}</div>
+            <div class="codigo-info">Mesa ${c.mesa} · ${timeAgo(c.creado)}</div>
+          </div>
+          <button class="btn-copy" onclick="ADMIN.copiar('${k}')">📋</button>
+          <button class="btn-del" onclick="ADMIN.eliminarMesa('${k}')">🗑</button>
+        </div>`;
+    }).join("");
+  },
+
+  async cargarAccesosMesa(){
+    DB.ref("mesa_accesos").on("value", snap=>{
+      const el=document.getElementById("accesos-mesa-list");
+      if(!snap.exists()){
+        el.innerHTML="<p style='color:#7a84a0;font-size:13px'>Sin accesos aún.</p>";
+        document.getElementById("st-accesos-mesa").textContent="0";
+        return;
+      }
+
+      let todos=[];
+      snap.forEach(codigoSnap=>{
+        const codigo=codigoSnap.key;
+        codigoSnap.forEach(accSnap=>{
+          const a=accSnap.val();
+          if(a) todos.push({...a,codigo});
+        });
+      });
+
+      todos.sort((a,b)=>(b.timestamp||0)-(a.timestamp||0));
+      document.getElementById("st-accesos-mesa").textContent=todos.length;
+
+      el.innerHTML=todos.slice(0,20).map(a=>{
+        return `<div class="accesos-item">
+          <span class="color-preview" style="background:#0f766e"></span>
+          <strong>${a.nombre||"?"}</strong>
+          <span style="font-size:11px;margin-left:4px">Mesa ${a.mesa} [${a.codigo}]</span>
+          · ${timeAgo(a.timestamp)}
+        </div>`;
+      }).join("");
+    });
+  },
+
+  async eliminarMesa(codigo){
+    if(!confirm(`¿Eliminar el código "${codigo}"? El encargado de esa mesa ya no podrá ingresar.`)) return;
+    await DB.ref(`codigos_mesa/${codigo}`).remove();
+    log("gen-mesa-log","🗑 Código eliminado: "+codigo);
+    this.cargarCodigosMesa();
+  },
+
+  async exportarCodigosMesa(){
+    const snap=await DB.ref("codigos_mesa").get();
+    if(!snap.exists()){ alert("No hay códigos de mesa para exportar."); return; }
+    const codigos=snap.val();
+    const keys=Object.keys(codigos).sort((a,b)=>Number(codigos[a].mesa)-Number(codigos[b].mesa));
+    const rows=[["Mesa","Codigo"]];
+    keys.forEach(k=>rows.push([codigos[k].mesa, k]));
+    const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const blob=new Blob([csv],{type:"text/csv"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url; a.download="codigos_mesa.csv"; a.click();
+    URL.revokeObjectURL(url);
+  }
+};
+
+document.getElementById("pass").addEventListener("keydown",e=>{
+  if(e.key==="Enter") ADMIN.conectar();
+});
+document.getElementById("gen-codigo").addEventListener("input",function(){
+  this.value=this.value.toUpperCase();
+});
+</script>
+</body>
+</html>
