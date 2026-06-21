@@ -228,20 +228,20 @@ function timeAgo(ts){
 const MESA_CANDIDATOS = ["mesa","Mesa","MESA","nro_mesa","nroMesa","numero_mesa",
   "numeroMesa","mesa_nro","mesaNro","mesaVotacion","mesa_votacion","local_mesa","nroMesaActa"];
 
-function detectarCampoMesa(persona){
+function detectarCampoMesa(personas){
+  // Revisamos varios registros (no solo el primero) por si alguno viene vacío
+  const muestra = personas.slice(0, Math.min(200, personas.length));
   for(const campo of MESA_CANDIDATOS){
-    if(persona[campo]!==undefined && persona[campo]!==null && String(persona[campo]).trim()!==""){
-      return campo;
-    }
+    const tieneDatos = muestra.some(p =>
+      p[campo]!==undefined && p[campo]!==null && String(p[campo]).trim()!=="");
+    if(tieneDatos) return campo;
   }
   return null;
 }
 
 function getMesa(persona, campoDetectado){
-  if(campoDetectado && persona[campoDetectado]!==undefined) return String(persona[campoDetectado]).trim();
-  // Fallback: probar todas las variantes por si el campo varía registro a registro
-  const c = detectarCampoMesa(persona);
-  return c ? String(persona[c]).trim() : "";
+  if(!campoDetectado || persona[campoDetectado]===undefined || persona[campoDetectado]===null) return "";
+  return String(persona[campoDetectado]).trim();
 }
 
 const ADMIN = {
@@ -414,7 +414,7 @@ const ADMIN = {
       log("escaneo-log", `📋 ${personas.length.toLocaleString()} personas leídas. Agrupando por mesa...`);
 
       // Detectar automáticamente cómo se llama el campo de mesa en estos datos
-      const campoMesa = detectarCampoMesa(personas[0]);
+      const campoMesa = detectarCampoMesa(personas);
       if (!campoMesa) {
         log("escaneo-log", "❌ No encontré ningún campo de mesa reconocible en el primer registro.");
         log("escaneo-log", "📋 Campos disponibles: " + Object.keys(personas[0]).join(", "));
