@@ -17,6 +17,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
 <style>
 /* ══════════════════════════════════════════
@@ -261,6 +262,16 @@ img{max-width:100%}
   letter-spacing:.07em;color:var(--muted);margin-bottom:10px}
 
 .color-stat-list{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+.dash-section-title{font-size:13px;font-weight:800;text-transform:uppercase;
+  letter-spacing:.06em;color:var(--muted);margin:18px 0 8px}
+.dash-card{background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;padding:14px}
+.canal-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:4px}
+.canal-stat{display:flex;flex-direction:column;align-items:center;text-align:center;
+  background:var(--surface2);border-radius:8px;padding:8px 4px}
+.cs-val{font-size:22px;font-weight:800;line-height:1.1}
+.cs-lbl{font-size:10px;color:var(--muted);margin-top:2px;text-transform:uppercase;
+  letter-spacing:.04em;line-height:1.3}
 .color-stat-row{
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
   padding:12px 14px;display:flex;align-items:center;gap:12px;
@@ -1278,58 +1289,57 @@ const APP = {
     const atendidos = estados.filter(e=>e.confirmado).length;
     const pct = total > 0 ? Math.round(marcados/total*100) : 0;
 
-    // Mapa rápido CI → persona (evita recorrer el padrón completo muchas veces)
     const padronByCi = {};
     padronLocal.forEach(p => { padronByCi[p.ci]=p; });
 
-    // Doble control: mesa vs operador/brigada
     const estadosConCi = Object.entries(estadosLocal).map(([ci,e])=>({ci,...e}));
-    const votadosMesa = estadosConCi.filter(e=>e.votado_mesa);
-    const soloMesa     = votadosMesa.filter(e=>!e.confirmado);          // mesa dice que votó, pero operador/brigada no lo tienen
-    const soloOpBrig    = estadosConCi.filter(e=>e.confirmado && !e.votado_mesa); // operador/brigada confirmaron, mesa no lo registró
-    const coinciden     = votadosMesa.filter(e=>e.confirmado).length;
+    const votadosMesa  = estadosConCi.filter(e=>e.votado_mesa);
+    const soloMesa     = votadosMesa.filter(e=>!e.confirmado);
+    const soloOpBrig   = estadosConCi.filter(e=>e.confirmado && !e.votado_mesa);
+    const coinciden    = votadosMesa.filter(e=>e.confirmado).length;
 
-    // Conteo por color (asignados y confirmados, con nombres)
-    const porColor = {};
-    const porColorConfirmado = {};
-    const porColorNombres = {};
-    Object.keys(GRUPOS).forEach(k => { porColor[k]=0; porColorConfirmado[k]=0; porColorNombres[k]=[]; });
-    estadosConCi.forEach(e => {
-      if (porColor[e.color]===undefined) return;
+    // Por color
+    const porColor={}, porColorConf={}, porColorNombres={};
+    Object.keys(GRUPOS).forEach(k=>{porColor[k]=0;porColorConf[k]=0;porColorNombres[k]=[];});
+    estadosConCi.forEach(e=>{
+      if(porColor[e.color]===undefined) return;
       porColor[e.color]++;
-      if (e.confirmado) {
-        porColorConfirmado[e.color]++;
-        const p = padronByCi[e.ci];
-        porColorNombres[e.color].push(p ? `${p.apellido||""}, ${p.nombre||""}` : `CI ${e.ci}`);
+      if(e.confirmado){
+        porColorConf[e.color]++;
+        const p=padronByCi[e.ci];
+        porColorNombres[e.color].push(p?`${p.apellido||""},${p.nombre||""}`:`CI ${e.ci}`);
       }
     });
 
-    // Conteo por mesa (marcados por operador y votados según mesa)
-    const porMesa = {};
-    const porMesaVotado = {};
-    estadosConCi.forEach(e => {
-      const p = padronByCi[e.ci];
-      if (!p || !p.mesa) return;
+    // Por mesa
+    const porMesa={}, porMesaVotado={};
+    estadosConCi.forEach(e=>{
+      const p=padronByCi[e.ci];
+      if(!p||!p.mesa) return;
       porMesa[p.mesa]=(porMesa[p.mesa]||0)+1;
-      if (e.votado_mesa) porMesaVotado[p.mesa]=(porMesaVotado[p.mesa]||0)+1;
+      if(e.votado_mesa) porMesaVotado[p.mesa]=(porMesaVotado[p.mesa]||0)+1;
     });
 
-    // Comparativa de canales
-    const confOperador = estados.filter(e=>e.confirmado && e.confirmado_rol==="operador").length;
-    const confBrigada   = estados.filter(e=>e.confirmado && e.confirmado_rol==="brigada").length;
-    const confMesaTotal = votadosMesa.length;
+    // Canales
+    const confOp    = estados.filter(e=>e.confirmado && e.confirmado_rol==="operador").length;
+    const confBrig  = estados.filter(e=>e.confirmado && e.confirmado_rol==="brigada").length;
+    const confMesa  = votadosMesa.length;
 
-    // Últimas actividades
-    const recientes = estados
-      .filter(e=>e.timestamp)
-      .sort((a,b)=>b.timestamp-a.timestamp)
-      .slice(0,8);
+    // Brigada: personas confirmadas con foto
+    const brigConFoto = estadosConCi.filter(e=>e.atendido_brigada && e.fotos_brigada).length;
+    // Brigada: confirmadas sin foto (hechas por brigada pero sin foto)
+    const brigSinFoto = estadosConCi.filter(e=>e.atendido_brigada && !e.fotos_brigada).length;
+
+    // Recientes
+    const recientes = estados.filter(e=>e.timestamp).sort((a,b)=>b.timestamp-a.timestamp).slice(0,6);
 
     document.getElementById("dash-updated").textContent =
-      `Actualizado ${timeAgo(Date.now())} · ${marcados} marcados`;
+      `Actualizado ahora · ${marcados} marcados`;
 
     document.getElementById("dash-content").innerHTML = `
-      <!-- Stats principales -->
+
+      <!-- ── RESUMEN GENERAL ── -->
+      <div class="dash-section-title">📊 Resumen general</div>
       <div class="stat-grid">
         <div class="stat-card">
           <div class="val">${total.toLocaleString()}</div>
@@ -1343,155 +1353,248 @@ const APP = {
         </div>
         <div class="stat-card">
           <div class="val" style="color:var(--success)">${atendidos.toLocaleString()}</div>
-          <div class="lbl">Atendidos</div>
+          <div class="lbl">Confirmaron que votaron</div>
           <div class="sub">${marcados>0?Math.round(atendidos/marcados*100):0}% de marcados</div>
         </div>
         <div class="stat-card">
           <div class="val" style="color:var(--warning)">${(marcados-atendidos).toLocaleString()}</div>
           <div class="lbl">Pendientes</div>
-          <div class="sub">Sin atender aún</div>
+          <div class="sub">Sin confirmar aún</div>
         </div>
       </div>
 
-      <!-- Por color -->
-      <div class="section-title">Por grupo de color</div>
-      <div class="color-stat-list">
-        ${Object.entries(GRUPOS).map(([k,v])=>{
-          const n = porColor[k]||0;
-          const nc = porColorConfirmado[k]||0;
-          const p = marcados>0 ? Math.round(n/marcados*100) : 0;
-          const pc = n>0 ? Math.round(nc/n*100) : 0;
-          const nombres = porColorNombres[k]||[];
-          return `
-            <div class="color-stat-row" style="flex-direction:column;align-items:stretch;gap:6px">
-              <div style="display:flex;align-items:center;gap:10px">
-                <div class="color-dot" style="background:${v.bg}"></div>
-                <div class="color-stat-name" style="flex:1">${v.label}</div>
-                <div style="text-align:right">
-                  <div class="color-stat-num" style="color:${v.bg}">${n} <span style="font-size:12px;color:var(--muted)">asignados</span></div>
-                  <div class="color-stat-pct">${p}% del total marcado</div>
+      <!-- Gráfico dona general -->
+      <div class="dash-card" style="margin-bottom:14px">
+        <canvas id="chart-dona" height="200"></canvas>
+      </div>
+
+      <!-- ── OPERADOR ── -->
+      <div class="dash-section-title" style="color:#3d7eff">🟦 Operadores</div>
+      <div class="dash-card" style="margin-bottom:14px">
+        <div class="canal-stats">
+          <div class="canal-stat"><span class="cs-val" style="color:#3d7eff">${marcados}</span><span class="cs-lbl">Personas marcadas</span></div>
+          <div class="canal-stat"><span class="cs-val" style="color:var(--success)">${confOp}</span><span class="cs-lbl">Confirmadas por operador</span></div>
+          <div class="canal-stat"><span class="cs-val" style="color:var(--warning)">${marcados-confOp}</span><span class="cs-lbl">Pendientes de operador</span></div>
+        </div>
+        <div style="margin-top:12px">
+          <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">Por grupo de color</div>
+          ${Object.entries(GRUPOS).map(([k,v])=>{
+            const n=porColor[k]||0;
+            const nc=porColorConf[k]||0;
+            const pc=n>0?Math.round(nc/n*100):0;
+            const nombres=porColorNombres[k]||[];
+            return `<div style="margin-bottom:8px">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+                <span style="width:10px;height:10px;border-radius:50%;background:${v.bg};flex-shrink:0;display:inline-block"></span>
+                <span style="font-size:13px;flex:1">${v.label}</span>
+                <span style="font-size:12px;color:var(--muted)">${n} marcados · <span style="color:var(--success)">${nc} votaron (${pc}%)</span></span>
+                ${nombres.length>0?`<button class="btn-sm" style="padding:2px 8px;font-size:10px" onclick="APP.toggleColorNames('op_${k}')">ver</button>`:""}
+              </div>
+              <div style="background:var(--surface2);border-radius:20px;height:6px;overflow:hidden">
+                <div style="height:100%;width:${pc}%;background:${v.bg};transition:width .3s"></div>
+              </div>
+              ${nombres.length>0?`<div id="names-op_${k}" class="hidden" style="font-size:11px;color:var(--muted);margin-top:4px;max-height:100px;overflow-y:auto;line-height:1.8">${nombres.join(" · ")}</div>`:""}
+            </div>`;
+          }).join("")}
+        </div>
+        <div style="margin-top:12px">
+          <canvas id="chart-colores" height="160"></canvas>
+        </div>
+      </div>
+
+      <!-- ── BRIGADA ── -->
+      <div class="dash-section-title" style="color:#c82020">🟥 Brigadas</div>
+      <div class="dash-card" style="margin-bottom:14px">
+        <div class="canal-stats">
+          <div class="canal-stat"><span class="cs-val" style="color:#c82020">${estadosConCi.filter(e=>e.atendido_brigada).length}</span><span class="cs-lbl">Confirmaciones de brigada</span></div>
+          <div class="canal-stat"><span class="cs-val" style="color:var(--success)">${brigConFoto}</span><span class="cs-lbl">Con foto</span></div>
+          <div class="canal-stat"><span class="cs-val" style="color:var(--warning)">${brigSinFoto}</span><span class="cs-lbl">Sin foto</span></div>
+        </div>
+        <div style="margin-top:12px">
+          <canvas id="chart-brigada" height="120"></canvas>
+        </div>
+        ${confBrig>0?`
+        <div style="margin-top:10px">
+          <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">Últimas confirmaciones de brigada</div>
+          ${estadosConCi.filter(e=>e.atendido_brigada&&e.timestamp_brigada)
+            .sort((a,b)=>(b.timestamp_brigada||0)-(a.timestamp_brigada||0))
+            .slice(0,5)
+            .map(e=>{
+              const p=padronByCi[e.ci];
+              return `<div class="activity-item">
+                <div class="activity-dot" style="background:#c82020"></div>
+                <div class="activity-text">
+                  <strong>${p?p.apellido+", "+p.nombre:"CI "+e.ci}</strong>
+                  <div style="font-size:11px;color:var(--muted)">por ${e.atendido_brigada_por||"?"} · ${timeAgo(e.timestamp_brigada)}</div>
                 </div>
-              </div>
-              <div style="display:flex;align-items:center;gap:10px;padding-left:22px">
-                <div style="flex:1;font-size:12px;color:var(--success)">✅ ${nc} votaron (${pc}%)</div>
-                ${nombres.length>0 ? `<button class="btn-sm" style="padding:3px 10px;font-size:11px" onclick="APP.toggleColorNames('${k}')">Ver nombres</button>` : ""}
-              </div>
-              ${nombres.length>0 ? `
-              <div id="names-${k}" class="hidden" style="padding-left:22px;font-size:12px;color:var(--muted);max-height:160px;overflow-y:auto;line-height:1.8">
-                ${nombres.join(" · ")}
-              </div>` : ""}
-            </div>`;
-        }).join("")}
+              </div>`;
+            }).join("")}
+        </div>`:"<div style='font-size:13px;color:var(--muted);margin-top:8px'>Sin confirmaciones de brigada aún.</div>"}
       </div>
 
-      <!-- Comparativa de canales -->
-      ${currentUD?.esAdmin ? `
-      <div class="section-title">📈 Comparativa de canales</div>
-      <div class="admin-section" style="margin-bottom:16px">
-        ${[
-          {label:"Operador", n:confOperador, color:"#3d7eff"},
-          {label:"Brigada",  n:confBrigada,  color:"#7c2d12"},
-          {label:"Mesa",     n:confMesaTotal,color:"#0f766e"}
-        ].map(c=>{
-          const cp = total>0 ? Math.round(c.n/total*100) : 0;
-          return `
-            <div style="margin-bottom:10px">
-              <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
-                <strong>${c.label}</strong>
-                <span style="color:var(--muted)">${c.n.toLocaleString()} (${cp}%)</span>
-              </div>
-              <div style="background:var(--surface2);border-radius:20px;height:10px;overflow:hidden">
-                <div style="height:100%;width:${cp}%;background:${c.color};transition:width .3s"></div>
-              </div>
-            </div>`;
-        }).join("")}
-        <div style="font-size:11px;color:var(--muted);margin-top:6px">% sobre el total del padrón (${total.toLocaleString()})</div>
+      <!-- ── MESA ── -->
+      <div class="dash-section-title" style="color:#0f766e">🟩 Mesas</div>
+      <div class="dash-card" style="margin-bottom:14px">
+        <div class="canal-stats">
+          <div class="canal-stat"><span class="cs-val" style="color:#0f766e">${confMesa}</span><span class="cs-lbl">Votaron (según mesa)</span></div>
+          <div class="canal-stat"><span class="cs-val" style="color:var(--success)">${coinciden}</span><span class="cs-lbl">Coinciden con brigada/op</span></div>
+          <div class="canal-stat"><span class="cs-val" style="color:var(--danger)">${soloMesa.length+soloOpBrig.length}</span><span class="cs-lbl">Discrepancias</span></div>
+        </div>
+        <div style="margin-top:12px">
+          <canvas id="chart-mesas" height="180"></canvas>
+        </div>
+        ${Object.keys(porMesa).length>0?`
+        <div style="margin-top:10px;overflow-x:auto">
+          <table class="mesa-table">
+            <thead><tr><th>Mesa</th><th>Marcados</th><th>Votó</th><th>%</th></tr></thead>
+            <tbody>
+              ${Object.entries(porMesa).sort((a,b)=>Number(a[0])-Number(b[0]))
+                .map(([m,n])=>{
+                  const v=porMesaVotado[m]||0;
+                  const pc=n>0?Math.round(v/n*100):0;
+                  return `<tr>
+                    <td><strong>Mesa ${m}</strong></td>
+                    <td>${n}</td>
+                    <td style="color:#0f766e">${v}</td>
+                    <td>${pc}%</td>
+                  </tr>`;
+                }).join("")}
+            </tbody>
+          </table>
+        </div>`:"<div style='font-size:13px;color:var(--muted);margin-top:8px'>Sin datos de mesa aún.</div>"}
       </div>
-      ` : ""}
 
-      <!-- Doble control: Mesa vs Operador/Brigada -->
-      ${currentUD?.esAdmin ? `
-      <div class="section-title">🔍 Doble control — Mesa vs Operador/Brigada</div>
-      <div class="stat-grid" style="margin-bottom:16px">
-        <div class="stat-card">
-          <div class="val" style="color:#0f766e">${votadosMesa.length.toLocaleString()}</div>
-          <div class="lbl">Votaron (mesa)</div>
-        </div>
-        <div class="stat-card">
-          <div class="val" style="color:var(--success)">${coinciden.toLocaleString()}</div>
-          <div class="lbl">Coinciden</div>
-          <div class="sub">Mesa y Operador/Brigada de acuerdo</div>
-        </div>
-        <div class="stat-card">
-          <div class="val" style="color:var(--danger)">${(soloMesa.length+soloOpBrig.length).toLocaleString()}</div>
-          <div class="lbl">Discrepancias</div>
-          <div class="sub">${soloMesa.length} solo mesa · ${soloOpBrig.length} solo op/brig</div>
+      <!-- ── COMPARATIVA 3 CANALES ── -->
+      ${currentUD?.esAdmin?`
+      <div class="dash-section-title">📈 Comparativa — Operador vs Brigada vs Mesa</div>
+      <div class="dash-card" style="margin-bottom:14px">
+        <canvas id="chart-canales" height="140"></canvas>
+        <div style="display:flex;gap:12px;justify-content:center;margin-top:10px;flex-wrap:wrap">
+          <span style="font-size:12px"><span style="color:#3d7eff">●</span> Operador: ${confOp}</span>
+          <span style="font-size:12px"><span style="color:#c82020">●</span> Brigada: ${confBrig}</span>
+          <span style="font-size:12px"><span style="color:#0f766e">●</span> Mesa: ${confMesa}</span>
         </div>
       </div>
-      ${(soloMesa.length+soloOpBrig.length) > 0 ? `
-      <div class="admin-section" style="margin-bottom:16px">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">
-          Primeros casos para revisar (CI, nombre, qué falta):
-        </div>
-        ${[...soloMesa.slice(0,10).map(e=>({...e,tipo:"⚠️ Mesa dice que votó, falta confirmar en Operador/Brigada"})),
-           ...soloOpBrig.slice(0,10).map(e=>({...e,tipo:"⚠️ Operador/Brigada confirmó, falta registrar en Mesa"}))]
-          .slice(0,15).map(e=>{
-            const p3 = padronLocal.find(x=>String(x.ci)===String(e.ci));
+
+      <!-- Discrepancias -->
+      ${(soloMesa.length+soloOpBrig.length)>0?`
+      <div class="dash-section-title" style="color:var(--danger)">⚠️ Discrepancias a revisar</div>
+      <div class="dash-card" style="margin-bottom:14px">
+        ${[...soloMesa.slice(0,8).map(e=>({...e,tipo:"Mesa sí, Brigada/Op no"})),
+           ...soloOpBrig.slice(0,8).map(e=>({...e,tipo:"Brigada/Op sí, Mesa no"}))]
+          .slice(0,12).map(e=>{
+            const p=padronByCi[e.ci];
             return `<div class="activity-item">
+              <div class="activity-dot" style="background:var(--danger)"></div>
               <div class="activity-text">
-                <strong>CI ${e.ci}</strong> — ${p3?p3.apellido+", "+p3.nombre:"?"}
-                <div style="font-size:11px;color:var(--warning);margin-top:2px">${e.tipo}</div>
+                <strong>CI ${e.ci}</strong> — ${p?p.apellido+", "+p.nombre:"?"}
+                <div style="font-size:11px;color:var(--warning)">${e.tipo}</div>
               </div>
             </div>`;
           }).join("")}
-      </div>` : ""}
-      ` : ""}
+      </div>`:""}
+      `:""}
 
-      <!-- Por mesa -->
-      <div class="section-title">Por mesa de votación</div>
-      <div class="admin-section" style="margin-bottom:16px">
-        <table class="mesa-table">
-          <thead><tr><th>Mesa</th><th>Marcados</th><th>Votó (mesa)</th><th>% del total</th></tr></thead>
-          <tbody>
-            ${Object.entries(porMesa)
-              .sort((a,b)=>b[1]-a[1])
-              .map(([mesa,n])=>`
-                <tr>
-                  <td><strong>Mesa ${mesa}</strong></td>
-                  <td>${n}</td>
-                  <td style="color:#0f766e">${porMesaVotado[mesa]||0}</td>
-                  <td>${total>0?Math.round(n/total*100):0}%</td>
-                </tr>`).join("")}
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Actividad reciente -->
-      <div class="section-title">Actividad reciente</div>
-      <div class="activity-list">
+      <!-- ── ACTIVIDAD RECIENTE ── -->
+      <div class="dash-section-title">🕐 Actividad reciente</div>
+      <div class="activity-list" style="margin-bottom:16px">
         ${recientes.map(e=>{
-          const p2 = padronLocal.find(x=>String(x.ci)===String(e.ci));
-          const g2 = grupoColor(e.color);
-          return `
-            <div class="activity-item">
-              <div class="activity-dot" style="background:${g2.bg}"></div>
-              <div class="activity-text">
-                <strong>${p2?p2.apellido+", "+p2.nombre:"CI "+e.ci}</strong>
-                marcado en <span style="color:${g2.bg}">${g2.label}</span>
-                por ${e.usuario||"?"}
-                ${e.confirmado?`<span class="badge" style="background:rgba(62,207,112,.15);color:var(--success);margin-left:4px;font-size:10px">✅</span>`:""}
-              </div>
-              <div class="activity-time">${timeAgo(e.timestamp)}</div>
-            </div>`;
+          const p2=padronByCi[e.ci];
+          const g2=grupoColor(e.color);
+          return `<div class="activity-item">
+            <div class="activity-dot" style="background:${g2.bg}"></div>
+            <div class="activity-text">
+              <strong>${p2?p2.apellido+", "+p2.nombre:"CI "+e.ci}</strong>
+              marcado en <span style="color:${g2.bg}">${g2.label}</span> por ${e.usuario||"?"}
+              ${e.confirmado?`<span class="badge" style="background:rgba(62,207,112,.15);color:var(--success);margin-left:4px;font-size:10px">✅</span>`:""}
+            </div>
+            <div class="activity-time">${timeAgo(e.timestamp)}</div>
+          </div>`;
         }).join("")}
       </div>
 
-      <!-- Exportar -->
-      ${currentUD?.esAdmin ? `
-        <div style="margin-top:20px">
-          <button class="btn" onclick="APP.exportarCSV()">⬇️ Exportar CSV</button>
-        </div>` : ""}
+      ${currentUD?.esAdmin?`<button class="btn" onclick="APP.exportarCSV()">⬇️ Exportar CSV</button>`:""}
     `;
+
+    // ── DIBUJAR GRÁFICOS ──
+    this._drawCharts({total,marcados,atendidos,confOp,confBrig,confMesa,
+      porColor,porColorConf,porMesa,porMesaVotado,brigConFoto,brigSinFoto});
+  },
+
+  _drawCharts({total,marcados,atendidos,confOp,confBrig,confMesa,
+    porColor,porColorConf,porMesa,porMesaVotado,brigConFoto,brigSinFoto}) {
+    const noMarcados = total - marcados;
+
+    // 1. Dona general
+    this._chart("chart-dona", "doughnut", {
+      labels:["Confirmaron que votaron","Marcados sin confirmar","Sin marcar"],
+      datasets:[{data:[atendidos,marcados-atendidos,noMarcados],
+        backgroundColor:["#3ecf70","#3d7eff","#2a3147"],
+        borderWidth:0}]
+    },{plugins:{legend:{position:"bottom",labels:{color:"#7a84a0",font:{size:11}}}}});
+
+    // 2. Barras por color (asignados vs confirmados)
+    const colores = Object.entries(GRUPOS);
+    this._chart("chart-colores","bar",{
+      labels: colores.map(([,v])=>v.label),
+      datasets:[
+        {label:"Asignados", data:colores.map(([k])=>porColor[k]||0),
+          backgroundColor:colores.map(([,v])=>v.bg+"88"), borderRadius:4},
+        {label:"Votaron",   data:colores.map(([k])=>porColorConf[k]||0),
+          backgroundColor:colores.map(([,v])=>v.bg), borderRadius:4}
+      ]
+    },{plugins:{legend:{position:"bottom",labels:{color:"#7a84a0",font:{size:10}}}},
+       scales:{x:{ticks:{color:"#7a84a0",font:{size:10}}},
+               y:{ticks:{color:"#7a84a0",font:{size:10}},grid:{color:"#2a3147"}}}});
+
+    // 3. Dona brigada
+    this._chart("chart-brigada","doughnut",{
+      labels:["Con foto","Sin foto","Sin confirmar por brigada"],
+      datasets:[{data:[brigConFoto,brigSinFoto,marcados-brigConFoto-brigSinFoto],
+        backgroundColor:["#c82020","#e05555","#2a3147"],borderWidth:0}]
+    },{plugins:{legend:{position:"bottom",labels:{color:"#7a84a0",font:{size:10}}}}});
+
+    // 4. Barras por mesa
+    const mesasArr = Object.keys(porMesa).sort((a,b)=>Number(a)-Number(b)).slice(0,20);
+    this._chart("chart-mesas","bar",{
+      labels: mesasArr.map(m=>"M"+m),
+      datasets:[
+        {label:"Marcados", data:mesasArr.map(m=>porMesa[m]||0),
+          backgroundColor:"#0d5c5588", borderRadius:3},
+        {label:"Votaron",  data:mesasArr.map(m=>porMesaVotado[m]||0),
+          backgroundColor:"#0f766e", borderRadius:3}
+      ]
+    },{plugins:{legend:{position:"bottom",labels:{color:"#7a84a0",font:{size:10}}}},
+       scales:{x:{ticks:{color:"#7a84a0",font:{size:9}}},
+               y:{ticks:{color:"#7a84a0",font:{size:10}},grid:{color:"#2a3147"}}}});
+
+    // 5. Barras canales
+    const pctOp   = total>0?Math.round(confOp/total*100):0;
+    const pctBrig = total>0?Math.round(confBrig/total*100):0;
+    const pctMesa = total>0?Math.round(confMesa/total*100):0;
+    this._chart("chart-canales","bar",{
+      labels:["Operador","Brigada","Mesa"],
+      datasets:[{
+        label:"Confirmaciones",
+        data:[confOp,confBrig,confMesa],
+        backgroundColor:["#3d7eff","#c82020","#0f766e"],
+        borderRadius:6
+      }]
+    },{plugins:{legend:{display:false}},
+       scales:{x:{ticks:{color:"#7a84a0"}},
+               y:{ticks:{color:"#7a84a0"},grid:{color:"#2a3147"}}}});
+  },
+
+  _chart(id, type, data, options) {
+    const canvas = document.getElementById(id);
+    if (!canvas) return;
+    // Destroy existing chart on that canvas if any
+    if (canvas._chartInst) { canvas._chartInst.destroy(); }
+    const ctx = canvas.getContext("2d");
+    canvas._chartInst = new Chart(ctx, {
+      type, data,
+      options: { responsive:true, animation:{duration:400}, ...options }
+    });
   },
 
   // ─── EXPORTAR CSV ───
