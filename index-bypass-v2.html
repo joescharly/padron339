@@ -1112,15 +1112,26 @@ const APP = {
 
   // ─── MARCAR COLOR ───
   async marcarColor(ci, color) {
+    // Prevención de doble marcado: si ya está marcado por OTRO operador, avisar
+    const est = estadosLocal[ci];
+    if (est && est.color && est.uid && est.uid !== currentUser?.uid && !currentUD?.esAdmin) {
+      const quien = est.usuario || "otro operador";
+      if (!confirm(`⚠️ Esta persona ya fue marcada en ${GRUPOS[est.color]?.label||est.color} por ${quien}.\n\n¿Querés cambiar el color de todas formas?`)) return;
+    }
+
     const data = {
       color,
       usuario: currentUD?.nombre || currentUser?.email,
       uid: currentUser?.uid,
-      timestamp: Date.now(),
+      timestamp: firebase.database.ServerValue.TIMESTAMP,
       atendido: false,
       confirmado: false
     };
     await this._writeEstado(ci, data);
+
+    // Historial
+    this._logHistorial(ci, `Marcado en ${GRUPOS[color]?.label||color}`, color);
+
     this.cerrarModal("modal-persona");
     toast(`✔ Marcado en ${GRUPOS[color]?.label||color}`, "ok");
   },
@@ -1129,8 +1140,9 @@ const APP = {
     const prev = estadosLocal[ci] || {};
     const data = { ...prev, color,
       usuarioAdmin: currentUD?.nombre,
-      timestampAdmin: Date.now() };
+      timestampAdmin: firebase.database.ServerValue.TIMESTAMP };
     await this._writeEstado(ci, data);
+    this._logHistorial(ci, `Admin cambió color a ${GRUPOS[color]?.label||color}`, color);
     this.abrirPersona(ci);
     toast(`Color cambiado a ${GRUPOS[color]?.label||color}`, "ok");
   },
@@ -1235,12 +1247,11 @@ const APP = {
       observacion: obs,
       atendido: true,
       atendidoPor: currentUD?.nombre || currentUser?.email,
-      timestampAtencion: Date.now(),
-      // Estado compartido: lo ve tanto el panel de operador como brigada.html
+      timestampAtencion: firebase.database.ServerValue.TIMESTAMP,
       confirmado: true,
       confirmado_por: currentUD?.nombre || currentUser?.email,
       confirmado_rol: "operador",
-      confirmado_ts: Date.now()
+      confirmado_ts: firebase.database.ServerValue.TIMESTAMP
     };
 
     if (file) {
@@ -1272,11 +1283,23 @@ const APP = {
 
     await this._writeEstado(ci, updates);
     this.cerrarModal("modal-generic");
+    this._logHistorial(ci, `Atención confirmada por operador`, estadosLocal[ci]?.color||"");
     toast("✔ Atención guardada", "ok");
   },
 
-  // ─── DASHBOARD ───
-  toggleColorNames(color) {
+  // ─── HISTORIAL ───
+  _logHistorial(ci, accion, color) {
+    if (!isOnline) return; // solo online para no saturar IndexedDB
+    const entry = {
+      ci,
+      accion,
+      color: color||"",
+      usuario: currentUD?.nombre || currentUser?.email || "?",
+      rol: currentUD?.esAdmin ? "admin" : "operador",
+      ts: firebase.database.ServerValue.TIMESTAMP
+    };
+    FB_DB.ref(`historial/${ci}`).push(entry).catch(()=>{});
+  },
     document.getElementById("names-"+color)?.classList.toggle("hidden");
   },
 

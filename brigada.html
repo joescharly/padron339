@@ -171,6 +171,9 @@ button,input,textarea{font-family:var(--font)}
 
 <!-- APP -->
 <div id="screen-app">
+  <div id="offline-banner" class="hidden" style="background:#7c2d12;color:#fff;text-align:center;font-size:12px;padding:6px;font-weight:700">
+    📴 Sin conexión — las confirmaciones se guardan localmente
+  </div>
   <div class="topbar">
     <div class="tb-color" id="tb-color"></div>
     <div class="tb-title" id="tb-title">Brigada</div>
@@ -381,6 +384,29 @@ const APP = {
       estadosLocal = snap.exists() ? snap.val() : {};
       this.renderLista();
       this.updateStats();
+    });
+
+    // Monitor de conectividad — flush de cola offline al reconectar
+    DB.ref(".info/connected").on("value", async snap => {
+      const online = snap.val() === true;
+      const banner = document.getElementById("offline-banner");
+      if (banner) banner.classList.toggle("hidden", online);
+
+      if (online) {
+        // Sincronizar confirmaciones pendientes offline
+        const cola = JSON.parse(sessionStorage.getItem("brigada_pending")||"[]");
+        if (cola.length > 0) {
+          sessionStorage.removeItem("brigada_pending");
+          for (const item of cola) {
+            try {
+              await DB.ref().update(item.updates);
+              await DB.ref(`historial/${item.updates[Object.keys(item.updates)[0].split("/")[1]]}`)
+                .push(item.histEntry).catch(()=>{});
+            } catch(e) { console.warn("Flush offline error:", e); }
+          }
+          alert(`✅ ${cola.length} confirmación(es) offline sincronizadas con el servidor.`);
+        }
+      }
     });
   },
 
@@ -605,8 +631,6 @@ const APP = {
     btn.textContent="⏳ Comprimiendo foto...";
 
     try {
-      // Comprimir la foto chica para poder guardarla como texto en la base de datos
-      // (sin usar Firebase Storage, que requiere plan pago).
       const canvas = document.createElement("canvas");
       const img    = document.createElement("img");
       const reader = new FileReader();
@@ -631,25 +655,51 @@ const APP = {
 
       btn.textContent="⏳ Registrando...";
 
-      // Actualizar estado en Firebase (todo en la base de datos, foto incluida)
-      const updates = {};
-      updates[`estados/${ci}/atendido_brigada`]     = true;
-      updates[`estados/${ci}/atendido_brigada_por`] = miNombre;
-      updates[`estados/${ci}/timestamp_brigada`]    = Date.now();
-      updates[`estados/${ci}/brigada_codigo`]       = miCodigo;
-      updates[`estados/${ci}/fotos_brigada/${Date.now()}`] = { foto: fotoBase64, por: miNombre, ts: Date.now() };
-      // Estado compartido: lo ve tanto brigada.html como el panel de operador
-      updates[`estados/${ci}/confirmado`]      = true;
-      updates[`estados/${ci}/confirmado_por`]  = miNombre;
-      updates[`estados/${ci}/confirmado_rol`]  = "brigada";
-      updates[`estados/${ci}/confirmado_ts`]   = Date.now();
+      const tsNow = firebase.database.ServerValue.TIMESTAMP;
+      const tsLocal = Date.now(); // para la clave del nodo de foto (necesita ser un número)
 
-      await DB.ref().update(updates);
+      const updates = {};
+      updates[`estados/${ci}/atendido_brigada`]          = true;
+      updates[`estados/${ci}/atendido_brigada_por`]      = miNombre;
+      updates[`estados/${ci}/timestamp_brigada`]         = tsNow;
+      updates[`estados/${ci}/brigada_codigo`]            = miCodigo;
+      updates[`estados/${ci}/fotos_brigada/${tsLocal}`]  = { foto: fotoBase64, por: miNombre, ts: tsNow };
+      updates[`estados/${ci}/confirmado`]                = true;
+      updates[`estados/${ci}/confirmado_por`]            = miNombre;
+      updates[`estados/${ci}/confirmado_rol`]            = "brigada";
+      updates[`estados/${ci}/confirmado_ts`]             = tsNow;
+
+      // Historial
+      const histEntry = { ci, accion:"Brigada confirmó voto", color: estadosLocal[ci]?.color||"",
+        usuario: miNombre, rol:"brigada", ts: tsNow };
+
+      try {
+        await DB.ref().update(updates);
+        await DB.ref(`historial/${ci}`).push(histEntry);
+      } catch(e) {
+        // Modo offline: guardar en sessionStorage para sincronizar al reconectar
+        if (e.message?.includes("network") || !navigator.onLine) {
+          const cola = JSON.parse(sessionStorage.getItem("brigada_pending")||"[]");
+          cola.push({ updates, histEntry, tsLocal });
+          sessionStorage.setItem("brigada_pending", JSON.stringify(cola));
+          // Actualizar estado local para que se vea confirmado en la lista
+          estadosLocal[ci] = { ...estadosLocal[ci], atendido_brigada:true,
+            atendido_brigada_por:miNombre, confirmado:true,
+            confirmado_por:miNombre, confirmado_rol:"brigada" };
+          APP.renderLista();
+          APP.updateStats();
+          this.cerrarModal();
+          alert("📴 Sin conexión — la confirmación se guardó localmente y se enviará al reconectar.");
+          return;
+        }
+        throw e;
+      }
+
       this.cerrarModal();
 
     } catch(e) {
       let msg = e.message || "Error desconocido";
-      if (msg.includes("network")) msg = "Error de red. Verificá tu internet e intentá de nuevo.";
+      if (msg.includes("network") || msg.includes("offline")) msg = "Error de red. La confirmación se guardó localmente.";
       alert("❌ " + msg);
       btn.disabled=false;
       btn.textContent="✅ Confirmar que votó + subir foto";
