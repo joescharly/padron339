@@ -761,9 +761,10 @@ const APP = {
     err.textContent="";
     btn.disabled=true; btn.textContent="Ingresando...";
     try {
+      if (!FB_AUTH) { err.textContent="Error: Firebase no inicializado. Recargá la página."; btn.disabled=false; btn.textContent="Ingresar al sistema"; return; }
       await FB_AUTH.signInWithEmailAndPassword(email, pass);
     } catch(e) {
-      err.textContent = "Email o contraseña incorrectos.";
+      err.textContent = "Error: " + (e.code || e.message || "desconocido");
       btn.disabled=false; btn.textContent="Ingresar al sistema";
     }
   },
