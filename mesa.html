@@ -551,9 +551,13 @@ const APP = {
       const updates = {};
       updates[`estados/${ci}/votado_mesa`]     = true;
       updates[`estados/${ci}/votado_mesa_por`] = miNombre;
-      updates[`estados/${ci}/votado_mesa_ts`]  = Date.now();
+      updates[`estados/${ci}/votado_mesa_ts`]  = firebase.database.ServerValue.TIMESTAMP;
       updates[`estados/${ci}/mesa_codigo`]     = miCodigo;
+      // Historial
+      const histEntry = { ci, accion:"Mesa confirmó voto", mesa:miMesa,
+        usuario:miNombre, rol:"mesa", ts: firebase.database.ServerValue.TIMESTAMP };
       await DB.ref().update(updates);
+      await DB.ref(`historial/${ci}`).push(histEntry).catch(()=>{});
       this.cerrarModal();
     } catch(e) {
       alert("❌ " + (e.message||"Error desconocido"));
