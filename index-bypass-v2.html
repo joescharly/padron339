@@ -1309,7 +1309,10 @@ const APP = {
     };
     FB_DB.ref(`historial/${ci}`).push(entry).catch(()=>{});
   },
-    document.getElementById("names-"+color)?.classList.toggle("hidden");
+
+  toggleColorNames(color) {
+    const el = document.getElementById("names-"+color);
+    if (el) el.classList.toggle("hidden");
   },
 
   updateDashboard() {
