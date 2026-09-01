@@ -221,6 +221,15 @@ const GRUPOS = {
 let DB, AUTH;
 let mesasDetectadas = []; // [{mesa, cantidad}]
 
+// BUG DE SEGURIDAD CORREGIDO: ver el mismo comentario en mesa.html/
+// brigada.html/index-bypass-v2.html -esta es la herramienta de MAS
+// privilegio de todas (crea/borra usuarios, ve logs de acceso), y
+// mostraba el nombre que cualquier mesero/brigadista tipeo al loguearse
+// directo en el DOM sin escapar. El peor lugar posible para tener este
+// hueco.
+function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
+function escJs(s){ return String(s==null?"":s).replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/"/g,"&quot;"); }
+
 function log(id, msg){
   const el=document.getElementById(id);
   const ts=new Date().toLocaleTimeString("es-PY");
@@ -336,11 +345,11 @@ const ADMIN = {
         <div class="codigo-row">
           <div class="codigo-color" style="background:${g.bg}"></div>
           <div class="codigo-text">
-            <div class="codigo-key">${k}</div>
-            <div class="codigo-info">${g.label}${c.descripcion?" · "+c.descripcion:""} · ${timeAgo(c.creado)}</div>
+            <div class="codigo-key">${esc(k)}</div>
+            <div class="codigo-info">${esc(g.label)}${c.descripcion?" · "+esc(c.descripcion):""} · ${timeAgo(c.creado)}</div>
           </div>
-          <button class="btn-copy" onclick="ADMIN.copiar('${k}')">📋</button>
-          <button class="btn-del" onclick="ADMIN.eliminar('${k}')">🗑</button>
+          <button class="btn-copy" onclick="ADMIN.copiar('${escJs(k)}')">📋</button>
+          <button class="btn-del" onclick="ADMIN.eliminar('${escJs(k)}')">🗑</button>
         </div>`;
     }).join("");
   },
@@ -370,8 +379,8 @@ const ADMIN = {
         const g=GRUPOS[a.color]||{bg:"#888",label:a.color};
         return `<div class="accesos-item">
           <span class="color-preview" style="background:${g.bg}"></span>
-          <strong>${a.nombre||"?"}</strong>
-          <span style="font-size:11px;margin-left:4px">[${a.codigo}]</span>
+          <strong>${esc(a.nombre||"?")}</strong>
+          <span style="font-size:11px;margin-left:4px">[${esc(a.codigo)}]</span>
           · ${timeAgo(a.timestamp)}
         </div>`;
       }).join("");
@@ -538,11 +547,11 @@ const ADMIN = {
         <div class="codigo-row">
           <div class="codigo-color" style="background:#0f766e"></div>
           <div class="codigo-text">
-            <div class="codigo-key">${k}</div>
-            <div class="codigo-info">Mesa ${c.mesa} · ${timeAgo(c.creado)}</div>
+            <div class="codigo-key">${esc(k)}</div>
+            <div class="codigo-info">Mesa ${esc(c.mesa)} · ${timeAgo(c.creado)}</div>
           </div>
-          <button class="btn-copy" onclick="ADMIN.copiar('${k}')">📋</button>
-          <button class="btn-del" onclick="ADMIN.eliminarMesa('${k}')">🗑</button>
+          <button class="btn-copy" onclick="ADMIN.copiar('${escJs(k)}')">📋</button>
+          <button class="btn-del" onclick="ADMIN.eliminarMesa('${escJs(k)}')">🗑</button>
         </div>`;
     }).join("");
   },
@@ -571,8 +580,8 @@ const ADMIN = {
       el.innerHTML=todos.slice(0,20).map(a=>{
         return `<div class="accesos-item">
           <span class="color-preview" style="background:#0f766e"></span>
-          <strong>${a.nombre||"?"}</strong>
-          <span style="font-size:11px;margin-left:4px">Mesa ${a.mesa} [${a.codigo}]</span>
+          <strong>${esc(a.nombre||"?")}</strong>
+          <span style="font-size:11px;margin-left:4px">Mesa ${esc(a.mesa)} [${esc(a.codigo)}]</span>
           · ${timeAgo(a.timestamp)}
         </div>`;
       }).join("");

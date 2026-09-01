@@ -754,6 +754,16 @@ function norm(s) {
 
 function grupoColor(key) { return GRUPOS[key] || { label:key, bg:"#888", tx:"#fff" }; }
 
+// BUG DE SEGURIDAD CORREGIDO: ver el mismo comentario en mesa.html -esta
+// app (la del operador/admin, la de MAS privilegios de todas) insertaba
+// nombres/observaciones de texto libre escritos por mesa/brigada/otros
+// operadores directo en el DOM via innerHTML, sin escapar. Cualquiera
+// con un codigo de mesa o brigada podia inyectar JS que se ejecutaba en
+// la sesion del ADMIN al abrir esa persona -el peor caso posible, porque
+// el admin es quien tiene acceso de lectura/escritura a TODO.
+function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
+function escJs(s){ return String(s==null?"":s).replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/"/g,"&quot;"); }
+
 // ════════════════════════════════════════════
 //  APP PRINCIPAL
 // ════════════════════════════════════════════
@@ -995,11 +1005,11 @@ const APP = {
         : "";
       const time = est ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">${timeAgo(est.timestamp)}</div>` : "";
       return `
-        <div class="result-card ${est?'is-marked':''}" onclick="APP.abrirPersona('${p.ci}')">
+        <div class="result-card ${est?'is-marked':''}" onclick="APP.abrirPersona('${escJs(p.ci)}')">
           <div class="card-color-bar" ${bar}></div>
           <div class="card-body">
             <div class="card-ci">CI ${formatCI(p.ci)}</div>
-            <div class="card-nombre ellipsis">${(p.apellido||p.ape||"")}, ${(p.nombre||p.nom||"")}</div>
+            <div class="card-nombre ellipsis">${esc(`${p.apellido||p.ape||""}, ${p.nombre||p.nom||""}`)}</div>
             <div class="card-sub">Mesa ${p.mesa} · Orden ${p.orden}</div>
           </div>
           <div class="card-badge">${badge}${checkConfirmado}${time}</div>
@@ -1036,10 +1046,10 @@ const APP = {
     if (est) {
       estadoHTML = `
         <div class="estado-box" style="border-left-color:${g?.bg||'#888'}">
-          <strong>${g?.label||est.color}</strong> — marcado por <em>${est.usuario||"?"}</em>
+          <strong>${esc(g?.label||est.color)}</strong> — marcado por <em>${esc(est.usuario||"?")}</em>
           <span style="color:var(--muted);margin-left:6px;font-size:12px">${timeAgo(est.timestamp)}</span>
-          ${est.observacion ? `<div class="obs">"${est.observacion}"</div>` : ""}
-          ${est.confirmado ? `<div><span class="atendido-tag">✅ Confirmado que votó</span> <span style="font-size:12px;color:var(--muted)">por ${est.confirmado_por||"?"} (${est.confirmado_rol==="brigada"?"brigada":"operador"})</span></div>` : ""}
+          ${est.observacion ? `<div class="obs">"${esc(est.observacion)}"</div>` : ""}
+          ${est.confirmado ? `<div><span class="atendido-tag">✅ Confirmado que votó</span> <span style="font-size:12px;color:var(--muted)">por ${esc(est.confirmado_por||"?")} (${est.confirmado_rol==="brigada"?"brigada":"operador"})</span></div>` : ""}
         </div>`;
     }
 
@@ -1048,7 +1058,7 @@ const APP = {
     if (est?.fotos) {
       fotosHTML = `<div class="fotos-row">`+
         Object.values(est.fotos).map(f=>
-          `<img src="${f.foto}" class="foto-thumb">`
+          `<img src="${esc(f.foto)}" class="foto-thumb">`
         ).join("")+`</div>`;
     }
 
@@ -1061,8 +1071,8 @@ const APP = {
         <div class="accion-section">
           <div class="accion-title">Confirmar presencia</div>
           <button class="color-preview-btn" style="background:${mg.bg};color:${mg.tx}"
-            onclick="APP.marcarColor('${ci}','${miGrupo}')">
-            ✔ Marcar en ${mg.label}
+            onclick="APP.marcarColor('${escJs(ci)}','${escJs(miGrupo)}')">
+            ✔ Marcar en ${esc(mg.label)}
           </button>
         </div>`;
     }
@@ -1071,7 +1081,7 @@ const APP = {
       accionHTML += `
         <div class="accion-section">
           <div class="accion-title">Registrar atención</div>
-          <button class="btn btn-success" onclick="APP.abrirAtencion('${ci}')">
+          <button class="btn btn-success" onclick="APP.abrirAtencion('${escJs(ci)}')">
             📋 Completar atención + foto
           </button>
         </div>`;
@@ -1084,12 +1094,12 @@ const APP = {
           <div class="color-grid">
             ${Object.entries(GRUPOS).map(([k,v])=>`
               <button class="color-btn" style="background:${v.bg};color:${v.tx}"
-                onclick="APP.adminSetColor('${ci}','${k}')">
-                ${v.label}
+                onclick="APP.adminSetColor('${escJs(ci)}','${escJs(k)}')">
+                ${esc(v.label)}
               </button>`).join("")}
           </div>
           ${est ? `<button class="btn btn-danger w100" style="margin-top:8px"
-            onclick="APP.adminQuitar('${ci}')">🗑 Quitar marca</button>` : ""}
+            onclick="APP.adminQuitar('${escJs(ci)}')">🗑 Quitar marca</button>` : ""}
         </div>`;
     }
 
@@ -1098,13 +1108,13 @@ const APP = {
       <div class="modal-hdr" style="${hdrBg}">
         <div class="modal-title-block">
           <div class="modal-ci">CI ${formatCI(ci)}</div>
-          <div class="modal-nombre">${(p.apellido||p.ape||"")}, ${(p.nombre||p.nom||"")}</div>
+          <div class="modal-nombre">${esc(`${p.apellido||p.ape||""}, ${p.nombre||p.nom||""}`)}</div>
         </div>
         <button class="modal-close" onclick="APP.cerrarModal('modal-persona')">✕</button>
       </div>
       <div class="modal-body">
         <div class="info-chips">
-          ${chips.map(c=>`<div class="info-chip"><strong>${c.k}</strong>${c.v}</div>`).join("")}
+          ${chips.map(c=>`<div class="info-chip"><strong>${esc(c.k)}</strong>${esc(c.v)}</div>`).join("")}
         </div>
         ${estadoHTML}
         ${fotosHTML}
@@ -1213,7 +1223,7 @@ const APP = {
       <div class="modal-hdr">
         <div class="modal-title-block">
           <div class="modal-ci">Registrar atención</div>
-          <div class="modal-nombre">${(p?.apellido||p?.ape||"")}, ${(p?.nombre||p?.nom||"")}</div>
+          <div class="modal-nombre">${esc(`${p?.apellido||p?.ape||""}, ${p?.nombre||p?.nom||""}`)}</div>
         </div>
         <button class="modal-close" onclick="APP.cerrarModal('modal-generic')">✕</button>
       </div>
@@ -1233,7 +1243,7 @@ const APP = {
             </label>
             <img id="foto-preview" class="foto-preview"/>
           </div>
-          <button class="btn btn-success" id="at-save-btn" onclick="APP.guardarAtencion('${ci}')">
+          <button class="btn btn-success" id="at-save-btn" onclick="APP.guardarAtencion('${escJs(ci)}')">
             ✔ Guardar atención
           </button>
         </div>
@@ -1351,7 +1361,7 @@ const APP = {
       if(e.confirmado){
         porColorConf[e.color]++;
         const p=padronByCi[e.ci];
-        porColorNombres[e.color].push(p?`${p.apellido||""},${p.nombre||""}`:`CI ${e.ci}`);
+        porColorNombres[e.color].push(esc(p?`${p.apellido||""},${p.nombre||""}`:`CI ${e.ci}`));
       }
     });
 
@@ -1468,8 +1478,8 @@ const APP = {
               return `<div class="activity-item">
                 <div class="activity-dot" style="background:#c82020"></div>
                 <div class="activity-text">
-                  <strong>${p?p.apellido+", "+p.nombre:"CI "+e.ci}</strong>
-                  <div style="font-size:11px;color:var(--muted)">por ${e.atendido_brigada_por||"?"} · ${timeAgo(e.timestamp_brigada)}</div>
+                  <strong>${esc(p?p.apellido+", "+p.nombre:"CI "+e.ci)}</strong>
+                  <div style="font-size:11px;color:var(--muted)">por ${esc(e.atendido_brigada_por||"?")} · ${timeAgo(e.timestamp_brigada)}</div>
                 </div>
               </div>`;
             }).join("")}
@@ -1531,8 +1541,8 @@ const APP = {
             return `<div class="activity-item">
               <div class="activity-dot" style="background:var(--danger)"></div>
               <div class="activity-text">
-                <strong>CI ${e.ci}</strong> — ${p?p.apellido+", "+p.nombre:"?"}
-                <div style="font-size:11px;color:var(--warning)">${e.tipo}</div>
+                <strong>CI ${esc(e.ci)}</strong> — ${esc(p?p.apellido+", "+p.nombre:"?")}
+                <div style="font-size:11px;color:var(--warning)">${esc(e.tipo)}</div>
               </div>
             </div>`;
           }).join("")}
@@ -1548,8 +1558,8 @@ const APP = {
           return `<div class="activity-item">
             <div class="activity-dot" style="background:${g2.bg}"></div>
             <div class="activity-text">
-              <strong>${p2?p2.apellido+", "+p2.nombre:"CI "+e.ci}</strong>
-              marcado en <span style="color:${g2.bg}">${g2.label}</span> por ${e.usuario||"?"}
+              <strong>${esc(p2?p2.apellido+", "+p2.nombre:"CI "+e.ci)}</strong>
+              marcado en <span style="color:${g2.bg}">${esc(g2.label)}</span> por ${esc(e.usuario||"?")}
               ${e.confirmado?`<span class="badge" style="background:rgba(62,207,112,.15);color:var(--success);margin-left:4px;font-size:10px">✅</span>`:""}
             </div>
             <div class="activity-time">${timeAgo(e.timestamp)}</div>
@@ -1677,14 +1687,14 @@ const APP = {
           return `
             <div class="user-row">
               <div class="user-avatar" style="background:${g?.bg||'#3d7eff'};color:${g?.tx||'#fff'}">
-                ${(u.nombre||"?")[0].toUpperCase()}
+                ${esc((u.nombre||"?")[0].toUpperCase())}
               </div>
               <div class="user-info-text">
-                <div class="user-name">${u.nombre||"Sin nombre"}</div>
-                <div class="user-email">${u.esAdmin?"Admin":"Grupo "+(g?.label||u.grupo||"—")}</div>
+                <div class="user-name">${esc(u.nombre||"Sin nombre")}</div>
+                <div class="user-email">${u.esAdmin?"Admin":"Grupo "+esc(g?.label||u.grupo||"—")}</div>
               </div>
               <div class="user-actions">
-                <button class="btn-sm danger" onclick="APP.adminBorrarUser('${uid}','${u.nombre||""}')">Quitar</button>
+                <button class="btn-sm danger" onclick="APP.adminBorrarUser('${escJs(uid)}','${escJs(u.nombre||"")}')">Quitar</button>
               </div>
             </div>`;
         }).join("");
@@ -1756,7 +1766,7 @@ María Ruiz, maria@gmail.com, , admin"></textarea></div>
       const [nombre, email] = partes;
       const resto = partes.slice(2).map(s=>(s||"").toLowerCase());
       if (!nombre || !email) {
-        log.innerHTML += `<div style="color:var(--danger)">⚠️ Línea inválida: "${linea}"</div>`;
+        log.innerHTML += `<div style="color:var(--danger)">⚠️ Línea inválida: "${esc(linea)}"</div>`;
         fail++; continue;
       }
       const grupo   = resto.find(s => GRUPOS[s]) || "";
@@ -1764,11 +1774,11 @@ María Ruiz, maria@gmail.com, , admin"></textarea></div>
       try {
         const uid = await crearCuentaOperador(email, pass);
         await FB_DB.ref(`usuarios/${uid}`).set({ nombre, grupo, esAdmin, email });
-        log.innerHTML += `<div style="color:var(--success)">✅ ${nombre} → ${esAdmin?"Admin":(GRUPOS[grupo]?.label||"sin grupo")}</div>`;
+        log.innerHTML += `<div style="color:var(--success)">✅ ${esc(nombre)} → ${esAdmin?"Admin":(GRUPOS[grupo]?.label||"sin grupo")}</div>`;
         ok++;
       } catch(e) {
         const detalle = `${e.code ? "["+e.code+"] " : ""}${e.message}`;
-        log.innerHTML += `<div style="color:var(--danger)">❌ ${nombre} (${email}): ${detalle}</div>`;
+        log.innerHTML += `<div style="color:var(--danger)">❌ ${esc(nombre)} (${esc(email)}): ${esc(detalle)}</div>`;
         errores.push(`${nombre} (${email}):\n${detalle}`);
         fail++;
       }
@@ -1804,16 +1814,16 @@ María Ruiz, maria@gmail.com, , admin"></textarea></div>
       <div class="modal-hdr">
         <div class="modal-title-block">
           <div class="modal-ci">Mi cuenta</div>
-          <div class="modal-nombre">${currentUD?.nombre||currentUser?.email||"Usuario"}</div>
+          <div class="modal-nombre">${esc(currentUD?.nombre||currentUser?.email||"Usuario")}</div>
         </div>
         <button class="modal-close" onclick="APP.cerrarModal('modal-generic')">✕</button>
       </div>
       <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
         <div class="info-chip">
-          <strong>Email</strong>${currentUser?.email||"—"}
+          <strong>Email</strong>${esc(currentUser?.email||"—")}
         </div>
         ${g ? `<div class="info-chip"><strong>Grupo</strong>
-          <span style="color:${g.bg}">${g.label}</span></div>` : ""}
+          <span style="color:${g.bg}">${esc(g.label)}</span></div>` : ""}
         ${currentUD?.esAdmin ? `<div class="info-chip"><strong>Rol</strong>Administrador</div>` : ""}
         <div style="margin-top:8px">
           <button class="btn btn-danger" onclick="APP.logout()">🚪 Cerrar sesión</button>

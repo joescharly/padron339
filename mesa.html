@@ -282,6 +282,16 @@ async function initFB() {
 // ══════════════════════
 function norm(s){ return String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9 ]/g,""); }
 function formatCI(ci){ return String(ci).replace(/\B(?=(\d{3})+(?!\d))/g,"."); }
+// BUG DE SEGURIDAD CORREGIDO: esta app insertaba texto libre (el nombre
+// que cualquier persona tipea al loguearse, guardado como votado_mesa_por
+// y despues mostrado a TODOS los demas via innerHTML) directo en el DOM,
+// sin escapar. Cualquiera con un codigo de mesa podia poner
+// `<img src=x onerror="...">` como su "nombre" y ejecutar JS en el
+// navegador de cualquier otro mesero/operador que abriera esa persona
+// -XSS persistente real, no teorico. esc() escapa HTML; escJs() escapa
+// para cuando el valor va dentro de un atributo onclick='...'.
+function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
+function escJs(s){ return String(s==null?"":s).replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/"/g,"&quot;"); }
 function timeAgo(ts){
   if(!ts) return "";
   const d=Math.floor((Date.now()-ts)/1000);
@@ -452,15 +462,15 @@ const APP = {
     }
 
     el.innerHTML = personas.map(p => {
-      const nombre = `${p.pad.apellido||p.pad.ape||""}, ${p.pad.nombre||p.pad.nom||""}`;
-      const orden  = `Orden ${p.pad.orden||"—"}`;
+      const nombre = esc(`${p.pad.apellido||p.pad.ape||""}, ${p.pad.nombre||p.pad.nom||""}`);
+      const orden  = esc(`Orden ${p.pad.orden||"—"}`);
       const badge  = p.est.votado_mesa
         ? `<span class="badge badge-ok">✅ Votó</span>`
         : `<span class="badge badge-pend">⏳ Pendiente</span>`;
       const otroControl = p.est.confirmado
         ? `<div class="pc-sub" style="color:var(--accent);margin-top:2px">ℹ️ También confirmado por ${p.est.confirmado_rol==="brigada"?"brigada":"operador"}</div>` : "";
       return `
-        <div class="persona-card" onclick="APP.abrirPersona('${p.ci}')">
+        <div class="persona-card" onclick="APP.abrirPersona('${escJs(p.ci)}')">
           <div class="pc-badge">${badge}</div>
           <div class="pc-ci">CI ${formatCI(p.ci)}</div>
           <div class="pc-nombre">${nombre}</div>
@@ -491,13 +501,13 @@ const APP = {
     const pad = padronLocal[ci];
 
     const nombre = pad
-      ? `${pad.apellido||pad.ape||""}, ${pad.nombre||pad.nom||""}`
+      ? esc(`${pad.apellido||pad.ape||""}, ${pad.nombre||pad.nom||""}`)
       : `CI ${formatCI(ci)}`;
 
     const otroControl = est.confirmado
       ? `<div class="info-chip" style="width:100%;background:rgba(61,126,255,.1);border-color:var(--accent)">
            <strong>Doble control</strong>
-           También confirmado por ${est.confirmado_rol==="brigada"?"brigada":"operador"} (${est.confirmado_por||"?"})
+           También confirmado por ${est.confirmado_rol==="brigada"?"brigada":"operador"} (${esc(est.confirmado_por||"?")})
          </div>` : "";
 
     let contenido = "";
@@ -507,15 +517,15 @@ const APP = {
         <div class="atendido-box">
           <div class="icon">✅</div>
           <p>Marcado como que votó</p>
-          <small>por ${est.votado_mesa_por||"?"} · ${timeAgo(est.votado_mesa_ts)}</small>
+          <small>por ${esc(est.votado_mesa_por||"?")} · ${timeAgo(est.votado_mesa_ts)}</small>
         </div>
-        <button class="btn btn-red" onclick="APP.desmarcarMesa('${ci}')">
+        <button class="btn btn-red" onclick="APP.desmarcarMesa('${escJs(ci)}')">
           ↩ Deshacer
         </button>`;
     } else {
       contenido = `
-        <button class="btn btn-green" id="btn-confirmar-${ci}"
-          onclick="APP.marcarVoto('${ci}')">
+        <button class="btn btn-green" id="btn-confirmar-${esc(ci)}"
+          onclick="APP.marcarVoto('${escJs(ci)}')">
           ✅ Marcar que votó
         </button>`;
     }

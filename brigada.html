@@ -294,6 +294,11 @@ async function initFB() {
 // ══════════════════════
 function norm(s){ return String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9 ]/g,""); }
 function formatCI(ci){ return String(ci).replace(/\B(?=(\d{3})+(?!\d))/g,"."); }
+// BUG DE SEGURIDAD CORREGIDO: ver el mismo comentario en mesa.html -esta
+// app insertaba nombres/observaciones de texto libre directo en el DOM
+// via innerHTML, sin escapar. XSS persistente real.
+function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
+function escJs(s){ return String(s==null?"":s).replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/"/g,"&quot;"); }
 function timeAgo(ts){
   if(!ts) return "";
   const d=Math.floor((Date.now()-ts)/1000);
@@ -489,13 +494,13 @@ const APP = {
 
     el.innerHTML = personas.map(p => {
       const pad = padronLocal[p.ci];
-      const nombre = pad ? `${pad.apellido||pad.ape||""}, ${pad.nombre||pad.nom||""}` : `CI ${formatCI(p.ci)}`;
-      const mesa   = pad ? `Mesa ${pad.mesa||"—"} · Orden ${pad.orden||"—"}` : "";
+      const nombre = pad ? esc(`${pad.apellido||pad.ape||""}, ${pad.nombre||pad.nom||""}`) : `CI ${formatCI(p.ci)}`;
+      const mesa   = pad ? esc(`Mesa ${pad.mesa||"—"} · Orden ${pad.orden||"—"}`) : "";
       const badge  = p.confirmado
         ? `<span class="badge badge-ok">✅ Votó</span>`
         : `<span class="badge badge-pend">⏳ Pendiente</span>`;
       return `
-        <div class="persona-card" onclick="APP.abrirPersona('${p.ci}')">
+        <div class="persona-card" onclick="APP.abrirPersona('${escJs(p.ci)}')">
           <div class="pc-badge">${badge}</div>
           <div class="pc-ci">CI ${formatCI(p.ci)}</div>
           <div class="pc-nombre">${nombre}</div>
@@ -539,12 +544,12 @@ const APP = {
     const g   = GRUPOS[miColor]||{label:miColor,bg:"#888",tx:"#fff"};
 
     const nombre = pad
-      ? `${pad.apellido||pad.ape||""}, ${pad.nombre||pad.nom||""}`
+      ? esc(`${pad.apellido||pad.ape||""}, ${pad.nombre||pad.nom||""}`)
       : `CI ${formatCI(ci)}`;
 
     const fotos = est?.fotos_brigada
       ? `<div class="foto-thumb-grid">${Object.values(est.fotos_brigada).map(f=>
-          `<img src="${f.foto}" class="foto-thumb">`
+          `<img src="${esc(f.foto)}" class="foto-thumb">`
         ).join("")}</div>` : "";
 
     let contenido = "";
@@ -555,25 +560,25 @@ const APP = {
         <div class="atendido-box">
           <div class="icon">✅</div>
           <p>Persona confirmada como votante</p>
-          <small>por ${est.confirmado_por||"?"} (${est.confirmado_rol==="operador"?"operador":"brigada"}) · ${timeAgo(est.confirmado_ts)}</small>
+          <small>por ${esc(est.confirmado_por||"?")} (${est.confirmado_rol==="operador"?"operador":"brigada"}) · ${timeAgo(est.confirmado_ts)}</small>
         </div>
         ${fotos}
-        <button class="btn btn-red" onclick="APP.desmarcarBrigada('${ci}')">
+        <button class="btn btn-red" onclick="APP.desmarcarBrigada('${escJs(ci)}')">
           ↩ Deshacer confirmación
         </button>`;
     } else {
       // Pendiente — mostrar formulario
       contenido = `
         ${fotos}
-        <label class="foto-zone" for="foto-inp-${ci}">
-          <input type="file" id="foto-inp-${ci}" accept="image/*" capture="environment"
-                 onchange="APP.previewFoto(this,'${ci}')"/>
+        <label class="foto-zone" for="foto-inp-${esc(ci)}">
+          <input type="file" id="foto-inp-${esc(ci)}" accept="image/*" capture="environment"
+                 onchange="APP.previewFoto(this,'${escJs(ci)}')"/>
           <div class="icon">📷</div>
           <p>Tocar para fotografiar la mesa</p>
         </label>
-        <img id="foto-prev-${ci}" class="foto-preview"/>
-        <button class="btn btn-green" id="btn-confirmar-${ci}"
-          onclick="APP.confirmarVoto('${ci}')">
+        <img id="foto-prev-${esc(ci)}" class="foto-preview"/>
+        <button class="btn btn-green" id="btn-confirmar-${esc(ci)}"
+          onclick="APP.confirmarVoto('${escJs(ci)}')">
           ✅ Confirmar que votó + subir foto
         </button>`;
     }
@@ -590,10 +595,10 @@ const APP = {
       <div class="modal-body">
         <div class="info-row">
           ${pad ? `
-            <div class="info-chip"><strong>Mesa</strong>${pad.mesa||"—"}</div>
-            <div class="info-chip"><strong>Orden</strong>${pad.orden||"—"}</div>
-            <div class="info-chip"><strong>Local</strong>${(pad.local||"—").substring(0,30)}</div>
-            <div class="info-chip"><strong>Dirección</strong>${(pad.direccion||"—").substring(0,40)}</div>
+            <div class="info-chip"><strong>Mesa</strong>${esc(pad.mesa||"—")}</div>
+            <div class="info-chip"><strong>Orden</strong>${esc(pad.orden||"—")}</div>
+            <div class="info-chip"><strong>Local</strong>${esc((pad.local||"—").substring(0,30))}</div>
+            <div class="info-chip"><strong>Dirección</strong>${esc((pad.direccion||"—").substring(0,40))}</div>
           ` : `<div class="info-chip"><strong>CI</strong>${formatCI(ci)}</div>`}
         </div>
         ${contenido}
