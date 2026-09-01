@@ -322,6 +322,13 @@ const APP = {
       miNombre = nombre;
       miCodigo = codigo;
 
+      // Registrar la SESIÓN de este dispositivo ANTES de leer el índice.
+      // Las reglas de Firebase validan el código contra codigos_mesa y después
+      // solo dejan leer mesa_index de ESTA mesa, no la de las demás.
+      await DB.ref(`sesiones/${AUTH.currentUser.uid}`).set({
+        tipo: "mesa", codigo, mesa: miMesa, ts: Date.now()
+      });
+
       btn.textContent="Cargando padrón de tu mesa...";
 
       // Precargar la lista completa de personas de esta mesa (índice armado por el admin)
@@ -589,6 +596,11 @@ document.getElementById("modal").addEventListener("click", e => {
       const d = JSON.parse(saved);
       miMesa=d.miMesa; miNombre=d.miNombre; miCodigo=d.miCodigo;
       await initFB();
+      // Re-registrar la sesión: si el navegador dio un uid anónimo nuevo
+      // (storage limpio, etc.) la sesión vieja ya no sirve para las reglas.
+      await DB.ref(`sesiones/${AUTH.currentUser.uid}`).set({
+        tipo: "mesa", codigo: miCodigo, mesa: miMesa, ts: Date.now()
+      });
       // Volver a precargar el padrón de la mesa (no se guarda en sessionStorage por tamaño)
       const idxSnap = await DB.ref(`mesa_index/${miMesa}`).get();
       padronLocal = idxSnap.exists() ? idxSnap.val() : {};

@@ -334,6 +334,13 @@ const APP = {
       miNombre = nombre;
       miCodigo = codigo;
 
+      // Registrar la SESIÓN de este dispositivo. Las reglas de Firebase validan
+      // que el código exista y que el color coincida, y a partir de acá recién
+      // habilitan que este dispositivo pueda escribir estados de ese color.
+      await DB.ref(`sesiones/${AUTH.currentUser.uid}`).set({
+        tipo: "brigada", codigo, color: miColor, ts: Date.now()
+      });
+
       // Registrar acceso
       const accKey = Date.now()+"_"+nombre.replace(/\s/g,"_");
       await DB.ref(`brigada_accesos/${codigo}/${accKey}`).set({
@@ -732,6 +739,11 @@ document.getElementById("modal").addEventListener("click", e => {
       const d = JSON.parse(saved);
       miColor=d.miColor; miNombre=d.miNombre; miCodigo=d.miCodigo;
       await initFB();
+      // Re-registrar la sesión: si el navegador dio un uid anónimo nuevo
+      // (storage limpio, etc.) la sesión vieja ya no sirve para las reglas.
+      await DB.ref(`sesiones/${AUTH.currentUser.uid}`).set({
+        tipo: "brigada", codigo: miCodigo, color: miColor, ts: Date.now()
+      });
       APP.setupUI();
       APP.listenEstados();
     } catch(e) { sessionStorage.removeItem("brigada"); }
