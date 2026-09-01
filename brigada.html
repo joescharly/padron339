@@ -299,6 +299,10 @@ function formatCI(ci){ return String(ci).replace(/\B(?=(\d{3})+(?!\d))/g,"."); }
 // via innerHTML, sin escapar. XSS persistente real.
 function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
 function escJs(s){ return String(s==null?"":s).replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/"/g,"&quot;"); }
+// BUG CORREGIDO: ver el mismo comentario en mesa.html -el nombre se
+// usaba tal cual como parte de una KEY de Firebase, que prohibe
+// ". # $ [ ] /" en las keys.
+function sanitizeKey(s){ return String(s||"").replace(/[.#$\[\]/]/g,"_"); }
 function timeAgo(ts){
   if(!ts) return "";
   const d=Math.floor((Date.now()-ts)/1000);
@@ -347,7 +351,7 @@ const APP = {
       });
 
       // Registrar acceso
-      const accKey = Date.now()+"_"+nombre.replace(/\s/g,"_");
+      const accKey = Date.now()+"_"+sanitizeKey(nombre.replace(/\s/g,"_"));
       await DB.ref(`brigada_accesos/${codigo}/${accKey}`).set({
         nombre, timestamp: Date.now(), color: miColor
       });

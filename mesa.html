@@ -292,6 +292,12 @@ function formatCI(ci){ return String(ci).replace(/\B(?=(\d{3})+(?!\d))/g,"."); }
 // para cuando el valor va dentro de un atributo onclick='...'.
 function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
 function escJs(s){ return String(s==null?"":s).replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/"/g,"&quot;"); }
+// BUG CORREGIDO: el nombre tipeado se usaba tal cual como parte de una
+// KEY de Firebase (mesa_accesos/{codigo}/{timestamp}_{nombre}). Firebase
+// prohibe ". # $ [ ]" (y "/") en las keys -si alguien tipeaba un nombre
+// con cualquiera de esos caracteres, el login fallaba con un error feo
+// en vez de dejarlo entrar. sanitizeKey() los reemplaza por "_".
+function sanitizeKey(s){ return String(s||"").replace(/[.#$\[\]/]/g,"_"); }
 function timeAgo(ts){
   if(!ts) return "";
   const d=Math.floor((Date.now()-ts)/1000);
@@ -346,7 +352,7 @@ const APP = {
       padronLocal = idxSnap.exists() ? idxSnap.val() : {};
 
       // Registrar acceso
-      const accKey = Date.now()+"_"+nombre.replace(/\s/g,"_");
+      const accKey = Date.now()+"_"+sanitizeKey(nombre.replace(/\s/g,"_"));
       await DB.ref(`mesa_accesos/${codigo}/${accKey}`).set({
         nombre, timestamp: Date.now(), mesa: miMesa
       });
