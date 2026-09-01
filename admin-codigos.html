@@ -150,8 +150,9 @@ p.sub{font-size:13px;color:#7a84a0;margin-bottom:16px;line-height:1.6}
     <h2>⚡ Atajo — Generar mesas 1 a 100 directo</h2>
     <p style="font-size:13px;color:#7a84a0;margin-bottom:10px">
       Crea de una vez los códigos para las mesas numeradas del 1 al 100, sin depender
-      del escaneo. El código de cada mesa va a ser siempre <code>MESA{número}-2026</code>,
-      así ya sabés de antemano cuál código corresponde a cada mesa.
+      del escaneo. El código de cada mesa es <code>MESA{número}-XXXXXX</code> con un
+      sufijo aleatorio real -no adivinable como antes, pero ya no se puede deducir
+      de memoria: hay que repartir la lista real (ver "Ver todos" abajo) a cada mesa.
     </p>
     <button class="btn btn-blue" onclick="ADMIN.generarMesas1a100()">⚡ Generar mesas 1 a 100</button>
     <div class="log" id="gen-1a100-log">Esperando...</div>
@@ -267,10 +268,22 @@ const ADMIN = {
 
   // ═══════ BRIGADA ═══════
 
+  // BUG DE SEGURIDAD CORREGIDO: generaba "COLOR-ADJETIVO-NNN" con
+  // Math.random() -no es criptograficamente seguro, y el espacio real es
+  // chico (10 adjetivos x 900 numeros = 9000 combinaciones POR color,
+  // brute-forceable facil). Ahora usa crypto.getRandomValues() con un
+  // sufijo alfanumerico de 6 caracteres (36^6 ≈ 2 mil millones de
+  // combinaciones), mismo patron ya documentado en CLAUDE.md
+  // ("MESA5-K7QP4M") que en este archivo nunca se habia aplicado.
+  tokenAleatorio(len = 6){
+    const alfabeto = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sin 0/O/1/I confusos
+    const bytes = new Uint8Array(len);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, b => alfabeto[b % alfabeto.length]).join("");
+  },
+
   generarCodigoAleatorio(color){
-    const adj=["NORTE","SUR","ESTE","OESTE","CENTRO","ALFA","BETA","DELTA","OMEGA","SIGMA"];
-    const num=Math.floor(Math.random()*900+100);
-    return `${color.toUpperCase()}-${adj[Math.floor(Math.random()*adj.length)]}-${num}`;
+    return `${color.toUpperCase()}-${this.tokenAleatorio(6)}`;
   },
 
   async generarCodigo(){
@@ -393,18 +406,22 @@ const ADMIN = {
       Object.values(existentes.val()).forEach(c => { yaExiste[String(c.mesa)] = true; });
     }
 
+    // BUG DE SEGURIDAD CORREGIDO: generaba "MESA{n}-2026", un patron
+    // totalmente predecible -con 100 mesas, alguien probaba las 100
+    // combinaciones posibles a mano en minutos, sin necesitar la lista.
+    // Ahora cada codigo lleva un sufijo aleatorio real (crypto).
     let creados=0, saltados=0;
     const updates = {};
     for (let n=1; n<=100; n++) {
       const mesa = String(n);
       if (yaExiste[mesa]) { saltados++; continue; }
-      const codigo = `MESA${n}-2026`;
+      const codigo = `MESA${n}-${this.tokenAleatorio(6)}`;
       updates[`codigos_mesa/${codigo}`] = { mesa, creado: Date.now(), activo: true };
       creados++;
     }
     if (creados>0) await DB.ref().update(updates);
 
-    log("gen-1a100-log", `✅ ${creados} código(s) creado(s) (MESA1-2026 a MESA100-2026). ${saltados} ya existían.`);
+    log("gen-1a100-log", `✅ ${creados} código(s) creado(s). ${saltados} ya existían.`);
     this.cargarCodigosMesa();
   },
 
@@ -490,7 +507,7 @@ const ADMIN = {
     let creados=0, saltados=0;
     for (const {mesa} of mesasDetectadas) {
       if (yaExiste[mesa]) { saltados++; continue; }
-      const codigo = `MESA${mesa}-2026`;
+      const codigo = `MESA${mesa}-${this.tokenAleatorio(6)}`;
       await DB.ref(`codigos_mesa/${codigo}`).set({
         mesa, creado: Date.now(), activo: true
       });
