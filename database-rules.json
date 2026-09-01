@@ -9,6 +9,21 @@
         ".read": "auth != null && auth.uid === $uid"
       }
     },
+
+    "sesiones": {
+      ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('esAdmin').val() === true || auth.uid === 'NWkCx3Lf1mPAbFBlYtNF82QTyvl1')",
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['tipo','codigo','ts']) && ( (newData.child('tipo').val() === 'brigada' && root.child('codigos_brigada').child(newData.child('codigo').val()).exists() && newData.child('color').val() === root.child('codigos_brigada').child(newData.child('codigo').val()).child('color').val()) || (newData.child('tipo').val() === 'mesa' && root.child('codigos_mesa').child(newData.child('codigo').val()).exists() && newData.child('mesa').val() === root.child('codigos_mesa').child(newData.child('codigo').val()).child('mesa').val()) )",
+        "tipo":   { ".validate": "newData.isString()" },
+        "codigo": { ".validate": "newData.isString() && newData.val().length <= 60" },
+        "color":  { ".validate": "newData.isString() && newData.val().length <= 20" },
+        "mesa":   { ".validate": "newData.isString() && newData.val().length <= 10" },
+        "ts":     { ".validate": "newData.isNumber()" },
+        "$otros": { ".validate": false }
+      }
+    },
     "padron": {
       ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('esAdmin').val() === true || auth.uid === 'NWkCx3Lf1mPAbFBlYtNF82QTyvl1')",
       ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('esAdmin').val() === true || auth.uid === 'NWkCx3Lf1mPAbFBlYtNF82QTyvl1')",
@@ -24,7 +39,7 @@
       ".read": "auth != null",
       ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('esAdmin').val() === true || auth.uid === 'NWkCx3Lf1mPAbFBlYtNF82QTyvl1')",
       "$ci": {
-        ".write": "auth != null"
+        ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('esAdmin').val() === true || auth.uid === 'NWkCx3Lf1mPAbFBlYtNF82QTyvl1' || (root.child('sesiones').child(auth.uid).child('tipo').val() === 'mesa' && root.child('mesa_index').child(root.child('sesiones').child(auth.uid).child('mesa').val()).child($ci).exists()) || (root.child('sesiones').child(auth.uid).child('tipo').val() === 'brigada' && data.child('color').val() === root.child('sesiones').child(auth.uid).child('color').val()))"
       }
     },
     "codigos_brigada": {
@@ -50,8 +65,11 @@
       ".write": "auth != null"
     },
     "mesa_index": {
-      ".read": "auth != null",
-      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('esAdmin').val() === true || auth.uid === 'NWkCx3Lf1mPAbFBlYtNF82QTyvl1')"
+      ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('esAdmin').val() === true || auth.uid === 'NWkCx3Lf1mPAbFBlYtNF82QTyvl1')",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('esAdmin').val() === true || auth.uid === 'NWkCx3Lf1mPAbFBlYtNF82QTyvl1')",
+      "$mesa": {
+        ".read": "auth != null && root.child('sesiones').child(auth.uid).child('mesa').val() === $mesa"
+      }
     }
   }
 }

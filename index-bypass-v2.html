@@ -1166,12 +1166,21 @@ const APP = {
   },
 
   // Escritura con cola offline
+  // BUG CORREGIDO: usaba .set(data) -aunque `data` arranca de `{...prev,
+  // ...}`, `prev` es el cache LOCAL del operador (estadosLocal/IndexedDB),
+  // que puede estar desactualizado respecto a lo que mesa.html/brigada.html
+  // ya escribieron en Firebase (votado_mesa, confirmado, atendido_brigada,
+  // etc.) -mas todavia con offline: un write encolado se sincroniza mucho
+  // despues con datos "prev" viejos. .set() pisa el nodo entero con lo que
+  // el operador tenia en su momento, borrando cualquier campo que mesa o
+  // brigada hayan escrito mientras tanto. .update() solo toca los campos
+  // presentes en `data`, nunca borra lo que otra app ya guardó.
   async _writeEstado(ci, data) {
     estadosLocal[ci] = data; // Optimistic local update
     await idbPut("estados", { ...data, ci });
     if (isOnline) {
       try {
-        await FB_DB.ref(`estados/${ci}`).set(data);
+        await FB_DB.ref(`estados/${ci}`).update(data);
       } catch(e) {
         pendingWrites.push({ ci, data });
         toast("Guardado offline, se sincronizará al reconectar", "warn", 4000);
@@ -1189,7 +1198,7 @@ const APP = {
     const batch = [...pendingWrites];
     pendingWrites = [];
     for (const { ci, data } of batch) {
-      try { await FB_DB.ref(`estados/${ci}`).set(data); }
+      try { await FB_DB.ref(`estados/${ci}`).update(data); }
       catch(e) { pendingWrites.push({ ci, data }); }
     }
     if (!pendingWrites.length) toast("✔ Cambios sincronizados", "ok");
