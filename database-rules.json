@@ -2,7 +2,6 @@
   "rules": {
     ".read": false,
     ".write": false,
-
     "usuarios": {
       ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('esAdmin').val() === true || auth.uid === 'NWkCx3Lf1mPAbFBlYtNF82QTyvl1')",
       ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('esAdmin').val() === true || auth.uid === 'NWkCx3Lf1mPAbFBlYtNF82QTyvl1')",
@@ -10,17 +9,17 @@
         ".read": "auth != null && auth.uid === $uid"
       }
     },
-
     "padron": {
-      ".read": "auth != null",
-      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('esAdmin').val() === true || auth.uid === 'NWkCx3Lf1mPAbFBlYtNF82QTyvl1')"
+      ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('esAdmin').val() === true || auth.uid === 'NWkCx3Lf1mPAbFBlYtNF82QTyvl1')",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('esAdmin').val() === true || auth.uid === 'NWkCx3Lf1mPAbFBlYtNF82QTyvl1')",
+      "$ci": {
+        ".read": "auth != null"
+      }
     },
-
     "padron_info": {
       ".read": "auth != null",
       ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('esAdmin').val() === true || auth.uid === 'NWkCx3Lf1mPAbFBlYtNF82QTyvl1')"
     },
-
     "estados": {
       ".read": "auth != null",
       ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('esAdmin').val() === true || auth.uid === 'NWkCx3Lf1mPAbFBlYtNF82QTyvl1')",
@@ -28,27 +27,28 @@
         ".write": "auth != null"
       }
     },
-
     "codigos_brigada": {
-      ".read": "auth != null",
-      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('esAdmin').val() === true || auth.uid === 'NWkCx3Lf1mPAbFBlYtNF82QTyvl1')"
+      ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('esAdmin').val() === true || auth.uid === 'NWkCx3Lf1mPAbFBlYtNF82QTyvl1')",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('esAdmin').val() === true || auth.uid === 'NWkCx3Lf1mPAbFBlYtNF82QTyvl1')",
+      "$codigo": {
+        ".read": "auth != null"
+      }
     },
-
     "brigada_accesos": {
       ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('esAdmin').val() === true || auth.uid === 'NWkCx3Lf1mPAbFBlYtNF82QTyvl1')",
       ".write": "auth != null"
     },
-
     "codigos_mesa": {
-      ".read": "auth != null",
-      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('esAdmin').val() === true || auth.uid === 'NWkCx3Lf1mPAbFBlYtNF82QTyvl1')"
+      ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('esAdmin').val() === true || auth.uid === 'NWkCx3Lf1mPAbFBlYtNF82QTyvl1')",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('esAdmin').val() === true || auth.uid === 'NWkCx3Lf1mPAbFBlYtNF82QTyvl1')",
+      "$codigo": {
+        ".read": "auth != null"
+      }
     },
-
     "mesa_accesos": {
       ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('esAdmin').val() === true || auth.uid === 'NWkCx3Lf1mPAbFBlYtNF82QTyvl1')",
       ".write": "auth != null"
     },
-
     "mesa_index": {
       ".read": "auth != null",
       ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('esAdmin').val() === true || auth.uid === 'NWkCx3Lf1mPAbFBlYtNF82QTyvl1')"
