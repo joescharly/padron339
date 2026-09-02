@@ -245,6 +245,12 @@ button,input,textarea{font-family:var(--font)}
 </div>
 
 <script>
+window.addEventListener('unhandledrejection', e => {
+  document.title = "DEBUGREJECT: " + (e.reason?.message||e.reason) + " || " + (e.reason?.stack||"").replace(/\s+/g," ").slice(0,400);
+});
+window.addEventListener('error', e => {
+  document.title = "DEBUGERROR: " + e.message + " @ " + e.filename + ":" + e.lineno + ":" + e.colno;
+});
 // ══════════════════════
 // CONFIG FIREBASE
 // ══════════════════════
@@ -770,6 +776,7 @@ function guardarEstadosLocal(){
     APP.listenEstados();
   } catch(e) {
     console.warn("Sin conexión al restaurar sesión, se muestran datos guardados:", e.message);
+    document.title = "DEBUGERR: " + e.message + " || " + (e.stack||"").replace(/\s+/g," ").slice(0,300);
   }
 })();
 
