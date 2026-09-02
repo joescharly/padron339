@@ -1379,11 +1379,6 @@ const APP = {
     const confBrig  = estados.filter(e=>e.confirmado && e.confirmado_rol==="brigada").length;
     const confMesa  = votadosMesa.length;
 
-    // Brigada: personas confirmadas con foto
-    const brigConFoto = estadosConCi.filter(e=>e.atendido_brigada && e.fotos_brigada).length;
-    // Brigada: confirmadas sin foto (hechas por brigada pero sin foto)
-    const brigSinFoto = estadosConCi.filter(e=>e.atendido_brigada && !e.fotos_brigada).length;
-
     // Recientes
     const recientes = estados.filter(e=>e.timestamp).sort((a,b)=>b.timestamp-a.timestamp).slice(0,6);
 
@@ -1461,11 +1456,8 @@ const APP = {
       <div class="dash-card" style="margin-bottom:14px">
         <div class="canal-stats">
           <div class="canal-stat"><span class="cs-val" style="color:#c82020">${estadosConCi.filter(e=>e.atendido_brigada).length}</span><span class="cs-lbl">Confirmaciones de brigada</span></div>
-          <div class="canal-stat"><span class="cs-val" style="color:var(--success)">${brigConFoto}</span><span class="cs-lbl">Con foto</span></div>
-          <div class="canal-stat"><span class="cs-val" style="color:var(--warning)">${brigSinFoto}</span><span class="cs-lbl">Sin foto</span></div>
-        </div>
-        <div style="margin-top:12px">
-          <canvas id="chart-brigada" height="120"></canvas>
+          <div class="canal-stat"><span class="cs-val" style="color:var(--success)">${confBrig}</span><span class="cs-lbl">Confirmadas</span></div>
+          <div class="canal-stat"><span class="cs-val" style="color:var(--warning)">${marcados-confBrig}</span><span class="cs-lbl">Pendientes</span></div>
         </div>
         ${confBrig>0?`
         <div style="margin-top:10px">
@@ -1572,11 +1564,11 @@ const APP = {
 
     // ── DIBUJAR GRÁFICOS ──
     this._drawCharts({total,marcados,atendidos,confOp,confBrig,confMesa,
-      porColor,porColorConf,porMesa,porMesaVotado,brigConFoto,brigSinFoto});
+      porColor,porColorConf,porMesa,porMesaVotado});
   },
 
   _drawCharts({total,marcados,atendidos,confOp,confBrig,confMesa,
-    porColor,porColorConf,porMesa,porMesaVotado,brigConFoto,brigSinFoto}) {
+    porColor,porColorConf,porMesa,porMesaVotado}) {
     const noMarcados = total - marcados;
 
     // 1. Dona general
@@ -1600,13 +1592,6 @@ const APP = {
     },{plugins:{legend:{position:"bottom",labels:{color:"#7a84a0",font:{size:10}}}},
        scales:{x:{ticks:{color:"#7a84a0",font:{size:10}}},
                y:{ticks:{color:"#7a84a0",font:{size:10}},grid:{color:"#2a3147"}}}});
-
-    // 3. Dona brigada
-    this._chart("chart-brigada","doughnut",{
-      labels:["Con foto","Sin foto","Sin confirmar por brigada"],
-      datasets:[{data:[brigConFoto,brigSinFoto,marcados-brigConFoto-brigSinFoto],
-        backgroundColor:["#c82020","#e05555","#2a3147"],borderWidth:0}]
-    },{plugins:{legend:{position:"bottom",labels:{color:"#7a84a0",font:{size:10}}}}});
 
     // 4. Barras por mesa
     const mesasArr = Object.keys(porMesa).sort((a,b)=>Number(a)-Number(b)).slice(0,20);
