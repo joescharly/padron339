@@ -754,8 +754,23 @@ document.getElementById("modal").addEventListener("click", e => {
 function guardarSesionLocal(){
   localStorage.setItem("brigada", JSON.stringify({miColor, miNombre, miCodigo}));
 }
+// "estados" es un árbol compartido por las 3 apps, y trae las fotos de
+// brigada en base64 (varios KB cada una). Guardar eso tal cual en
+// localStorage en cada actualización puede superar rápido el límite del
+// navegador (~5-10MB) con el correr del día -y ahí la caché offline
+// dejaría de actualizarse en silencio, justo cuando más se necesita. Para
+// la vista offline no hacen falta las fotos (solo saber quién está
+// pendiente/confirmado), así que se sacan antes de guardar.
+function sinFotos(estados){
+  const copia = {};
+  for (const ci in estados) {
+    const { fotos_brigada, fotos, ...resto } = estados[ci];
+    copia[ci] = resto;
+  }
+  return copia;
+}
 function guardarEstadosLocal(){
-  try { localStorage.setItem("brigada_estados", JSON.stringify(estadosLocal)); } catch(e) {}
+  try { localStorage.setItem("brigada_estados", JSON.stringify(sinFotos(estadosLocal))); } catch(e) {}
 }
 
 // Restaurar sesión
