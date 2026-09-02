@@ -99,9 +99,12 @@
     "grupos_config": {
       ".read": "auth != null && (root.child('usuarios').child(auth.uid).exists() || root.child('sesiones').child(auth.uid).exists())",
       ".write": "root.child('usuarios').child(auth.uid).child('esAdmin').val() === true",
-      "$color": {
-        ".validate": "$color.matches(/^(amarillo|azul|verde|rojo|naranja|violeta)$/)",
+      "$grupo": {
+        ".validate": "$grupo.matches(/^[a-z0-9_]{1,30}$/) && newData.hasChildren(['label','bg','tx'])",
         "label": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40" },
+        "bg":    { ".validate": "newData.isString() && newData.val().matches(/^#[0-9A-Fa-f]{6}$/)" },
+        "tx":    { ".validate": "newData.isString() && newData.val().matches(/^#[0-9A-Fa-f]{6}$/)" },
+        "orden": { ".validate": "newData.isNumber()" },
         "$otros": { ".validate": false }
       }
     }

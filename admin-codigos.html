@@ -101,31 +101,35 @@ p.sub{font-size:13px;color:#7a84a0;margin-bottom:16px;line-height:1.6}
   </div>
 
   <div class="card">
-    <h2>🏷️ Nombres de los grupos</h2>
+    <h2>🎨 Grupos de brigada</h2>
     <p style="font-size:13px;color:#7a84a0;margin-bottom:10px">
-      El color de cada grupo (el que ven mesa/brigada/operador para saber a quién
-      pertenece cada marca) no se puede cambiar, pero el <strong>nombre que se
-      muestra</strong> sí -por ejemplo, dejar el grupo en amarillo pero mostrar
-      "Concejal Rodríguez" en vez de "Amarillo" en toda la app.
+      Cada grupo tiene un nombre y un color -es lo que ven mesa/brigada/operador
+      para saber a quién pertenece cada marca. Podés cambiarle el nombre y el
+      color a los que ya existen, y crear los grupos nuevos que necesites (ej.
+      uno por candidato, por sector, etc.).
     </p>
-    <div id="nombres-grupos-list"></div>
-    <button class="btn btn-green" onclick="ADMIN.guardarNombresGrupos()">✅ Guardar nombres</button>
-    <div class="log" id="nombres-grupos-log">Esperando...</div>
+    <div id="grupos-list">Cargando...</div>
+
+    <div style="border-top:1px solid #2a3147;margin:14px 0;padding-top:14px">
+      <div class="field">
+        <label>Nombre del grupo nuevo</label>
+        <input type="text" id="nuevo-grupo-nombre" placeholder="Ej: Concejal Rodríguez"/>
+      </div>
+      <div class="field" style="display:flex;align-items:center;gap:10px">
+        <label style="margin-bottom:0">Color</label>
+        <input type="color" id="nuevo-grupo-color" value="#3d7eff" style="width:50px;height:36px;padding:2px;border-radius:6px;border:1px solid #2a3147;background:#1e2436;cursor:pointer"/>
+      </div>
+      <button class="btn btn-blue" onclick="ADMIN.crearGrupo()">➕ Crear grupo</button>
+    </div>
+    <div class="log" id="grupos-log">Esperando...</div>
   </div>
 
   <div class="card">
     <h2>➕ Generar nuevo código</h2>
     <div class="grid2">
       <div class="field">
-        <label>Color de brigada</label>
-        <select id="gen-color">
-          <option value="amarillo">🟡 Amarillo</option>
-          <option value="azul">🔵 Azul</option>
-          <option value="verde">🟢 Verde</option>
-          <option value="rojo">🔴 Rojo</option>
-          <option value="naranja">🟠 Naranja</option>
-          <option value="violeta">🟣 Violeta</option>
-        </select>
+        <label>Grupo de brigada</label>
+        <select id="gen-color"></select>
       </div>
       <div class="field">
         <label>Descripción (opcional)</label>
@@ -230,7 +234,11 @@ const FB_CONFIG = {
   appId:"1:556732839087:web:c6234e38868861c8f3505a"
 };
 
-const GRUPOS = {
+// Los grupos ya NO son una lista fija -viven en Firebase (grupos_config) y
+// el admin los crea/edita desde esta misma página (ver cargarGrupos() más
+// abajo). Estos 6 son solo la semilla de fábrica: si grupos_config está
+// vacío (primera vez), se usan estos como punto de partida.
+const GRUPOS_SEMILLA = {
   amarillo:{label:"Amarillo",bg:"#FFD600",tx:"#1a1400"},
   azul:    {label:"Azul",    bg:"#1a56db",tx:"#ffffff"},
   verde:   {label:"Verde",   bg:"#1e8a3e",tx:"#ffffff"},
@@ -238,10 +246,14 @@ const GRUPOS = {
   naranja: {label:"Naranja", bg:"#d9620a",tx:"#ffffff"},
   violeta: {label:"Violeta", bg:"#7c3aed",tx:"#ffffff"},
 };
-// Copia congelada de los nombres de fábrica -GRUPOS.label se pisa con el
-// nombre personalizado que ponga el admin (ver cargarNombresGrupos), y esta
-// copia es la que se usa como placeholder/valor "por defecto" en el form.
-const GRUPOS_DEFAULT = JSON.parse(JSON.stringify(GRUPOS));
+let GRUPOS = {};
+
+// Texto blanco o negro según el color de fondo, para que siempre se lea bien.
+function contraste(hex){
+  const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  const luminancia = (0.299*r + 0.587*g + 0.114*b) / 255;
+  return luminancia > 0.6 ? "#1a1400" : "#ffffff";
+}
 
 let DB, AUTH;
 let mesasDetectadas = []; // [{mesa, cantidad}]
@@ -287,53 +299,95 @@ const ADMIN = {
       this.cargarAccesos();
       this.cargarCodigosMesa();
       this.cargarAccesosMesa();
-      await this.cargarNombresGrupos();
+      await this.cargarGrupos();
     }catch(e){
       st.textContent="❌ "+e.message;
       st.style.color="#e05555";
     }
   },
 
-  // ═══════ NOMBRES DE LOS GRUPOS (el color no cambia, solo cómo se muestra) ═══════
+  // ═══════ GRUPOS DE BRIGADA (nombre + color, 100% editables) ═══════
 
-  async cargarNombresGrupos(){
+  async cargarGrupos(){
     const snap = await DB.ref("grupos_config").get();
-    const config = snap.exists() ? snap.val() : {};
+    let config = snap.exists() ? snap.val() : null;
 
-    // Aplicar los nombres personalizados a GRUPOS en memoria, así el resto de
-    // esta misma página (lista de códigos, el <select> del generador) ya
-    // muestra el nombre nuevo sin tener que tocar nada más.
-    for (const k of Object.keys(GRUPOS)) {
-      GRUPOS[k].label = config[k]?.label || GRUPOS_DEFAULT[k].label;
+    // Primera vez que se usa esto: grupos_config todavía no existe.
+    // Se siembra con los 6 de siempre para no perder continuidad con los
+    // códigos/gente ya asignados a "amarillo", "azul", etc.
+    if (!config) {
+      config = GRUPOS_SEMILLA;
+      await DB.ref("grupos_config").set(config);
+      log("grupos-log", "Primeros grupos creados (Amarillo, Azul, Verde, Rojo, Naranja, Violeta).");
     }
-    document.querySelectorAll("#gen-color option").forEach(opt => {
-      const k = opt.value;
-      const emoji = opt.textContent.trim().split(" ")[0];
-      opt.textContent = `${emoji} ${GRUPOS[k].label}`;
-    });
 
-    const el = document.getElementById("nombres-grupos-list");
-    el.innerHTML = Object.entries(GRUPOS_DEFAULT).map(([k,v]) => `
-      <div class="field">
-        <label><span class="color-preview" style="background:${v.bg}"></span>${esc(v.label)} (color interno, no cambia)</label>
-        <input type="text" id="nombre-grupo-${esc(k)}" value="${esc(config[k]?.label||"")}"
-               placeholder="Ej: ${esc(v.label)} (dejar vacío para usar este nombre)"/>
+    GRUPOS = config;
+    this.renderGruposList();
+    this.renderSelectColor();
+  },
+
+  renderSelectColor(){
+    const sel = document.getElementById("gen-color");
+    const actual = sel.value;
+    const entries = Object.entries(GRUPOS).sort((a,b)=>(a[1].orden||0)-(b[1].orden||0));
+    sel.innerHTML = entries.map(([k,v]) =>
+      `<option value="${esc(k)}">${esc(v.label)}</option>`).join("");
+    if (entries.some(([k]) => k===actual)) sel.value = actual;
+  },
+
+  renderGruposList(){
+    const el = document.getElementById("grupos-list");
+    const entries = Object.entries(GRUPOS).sort((a,b)=>(a[1].orden||0)-(b[1].orden||0));
+    el.innerHTML = entries.map(([k,v]) => `
+      <div class="codigo-row">
+        <input type="color" value="${v.bg}" style="width:32px;height:32px;padding:0;border:none;border-radius:6px;cursor:pointer;flex-shrink:0"
+               onchange="ADMIN.actualizarColorGrupo('${escJs(k)}', this.value)"/>
+        <input type="text" value="${esc(v.label)}" style="flex:1;background:#1e2436;border:1px solid #2a3147;border-radius:8px;padding:8px 10px;color:#e6e9f0;font-size:14px"
+               onchange="ADMIN.actualizarNombreGrupo('${escJs(k)}', this.value)"/>
       </div>`).join("");
   },
 
-  async guardarNombresGrupos(){
-    const updates = {};
-    for (const k of Object.keys(GRUPOS)) {
-      const val = document.getElementById("nombre-grupo-"+k).value.trim();
-      // Vacío = usar el nombre por defecto (se borra la personalización)
-      updates[`grupos_config/${k}/label`] = val || null;
-    }
+  async actualizarNombreGrupo(id, nuevoNombre){
+    nuevoNombre = nuevoNombre.trim();
+    if (!nuevoNombre) { log("grupos-log","❌ El nombre no puede quedar vacío."); this.renderGruposList(); return; }
     try {
-      await DB.ref().update(updates);
-      log("nombres-grupos-log", "✅ Nombres guardados. Ya se ven en las 3 apps.");
-    } catch(e) {
-      log("nombres-grupos-log", "❌ "+e.message);
-    }
+      await DB.ref(`grupos_config/${id}/label`).set(nuevoNombre);
+      GRUPOS[id].label = nuevoNombre;
+      log("grupos-log", `✅ Nombre actualizado.`);
+      this.renderSelectColor();
+      this.cargarCodigos(); // refresca la lista de códigos con el nombre nuevo
+    } catch(e) { log("grupos-log", "❌ "+e.message); }
+  },
+
+  async actualizarColorGrupo(id, nuevoColorHex){
+    const tx = contraste(nuevoColorHex);
+    try {
+      await DB.ref(`grupos_config/${id}`).update({ bg: nuevoColorHex, tx });
+      GRUPOS[id].bg = nuevoColorHex; GRUPOS[id].tx = tx;
+      log("grupos-log", `✅ Color actualizado.`);
+      this.cargarCodigos();
+    } catch(e) { log("grupos-log", "❌ "+e.message); }
+  },
+
+  async crearGrupo(){
+    const nombre = document.getElementById("nuevo-grupo-nombre").value.trim();
+    const colorHex = document.getElementById("nuevo-grupo-color").value;
+    if (!nombre) { log("grupos-log", "❌ Ingresá un nombre para el grupo."); return; }
+
+    // Id interno, invisible para el usuario -no hace falta que tenga
+    // relación con el nombre, así el nombre se puede cambiar después las
+    // veces que sea sin tener que migrar nada.
+    const id = "g" + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+    const nuevo = { label: nombre, bg: colorHex, tx: contraste(colorHex), orden: Date.now() };
+
+    try {
+      await DB.ref(`grupos_config/${id}`).set(nuevo);
+      GRUPOS[id] = nuevo;
+      document.getElementById("nuevo-grupo-nombre").value = "";
+      log("grupos-log", `✅ Grupo "${nombre}" creado.`);
+      this.renderGruposList();
+      this.renderSelectColor();
+    } catch(e) { log("grupos-log", "❌ "+e.message); }
   },
 
   cambiarTab(tab){

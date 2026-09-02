@@ -603,9 +603,11 @@ const FB_CONFIG = {
 };
 
 // ════════════════════════════════════════════
-//  GRUPOS DE COLOR — Editable
+//  GRUPOS DE COLOR — ya no son fijos, el admin los crea/edita desde
+//  admin-codigos.html. Esto es solo el resguardo de fábrica por si
+//  grupos_config todavía está vacío; cargarGrupos() lo reemplaza entero.
 // ════════════════════════════════════════════
-const GRUPOS = {
+let GRUPOS = {
   amarillo: { label:"Amarillo", bg:"#FFD600", tx:"#1a1400" },
   azul:     { label:"Azul",     bg:"#1a56db", tx:"#ffffff" },
   verde:    { label:"Verde",    bg:"#1e8a3e", tx:"#ffffff" },
@@ -817,7 +819,7 @@ const APP = {
       if (!cached) { toast("Sin conexión y sin datos de usuario.", "err"); return; }
       currentUD = cached;
     }
-    await this.aplicarNombresGrupos();
+    await this.cargarGrupos();
     this.setupUI();
     await this.loadPadron();
     this.listenEstados();
@@ -825,18 +827,16 @@ const APP = {
     document.getElementById("screen-app").classList.remove("hidden");
   },
 
-  // Nombres personalizados por grupo (se configuran en admin-codigos.html,
-  // ej. dejar el grupo en amarillo pero mostrar "Concejal Rodríguez" en vez
-  // de "Amarillo"). El color en sí -la clave interna, los permisos- no
-  // cambia, solo el texto que se ve en toda esta app.
-  async aplicarNombresGrupos() {
+  // Grupos reales (nombre + color), definidos por el admin en
+  // admin-codigos.html -pueden ser más o menos de los 6 originales, y con
+  // cualquier nombre/color. Reemplaza GRUPOS por completo con lo que haya
+  // en Firebase; si grupos_config está vacío por algún motivo, se quedan
+  // los 6 de fábrica de arriba como resguardo.
+  async cargarGrupos() {
     try {
       const snap = await FB_DB.ref("grupos_config").get();
-      const config = snap.exists() ? snap.val() : {};
-      for (const k in GRUPOS) {
-        if (config[k]?.label) GRUPOS[k].label = config[k].label;
-      }
-    } catch(e) { /* si falla, se quedan los nombres de fábrica */ }
+      if (snap.exists()) GRUPOS = snap.val();
+    } catch(e) { /* si falla, se quedan los de fábrica */ }
   },
 
   // ─── SETUP UI ───
