@@ -245,12 +245,6 @@ button,input,textarea{font-family:var(--font)}
 </div>
 
 <script>
-window.addEventListener('unhandledrejection', e => {
-  document.title = "DEBUGREJECT: " + (e.reason?.message||e.reason) + " || " + (e.reason?.stack||"").replace(/\s+/g," ").slice(0,400);
-});
-window.addEventListener('error', e => {
-  document.title = "DEBUGERROR: " + e.message + " @ " + e.filename + ":" + e.lineno + ":" + e.colno;
-});
 // ══════════════════════
 // CONFIG FIREBASE
 // ══════════════════════
@@ -541,14 +535,21 @@ const APP = {
         </div>`;
     }).join("");
 
-    // Cargar datos del padrón para los CIs que no tenemos
-    personas.forEach(p => {
-      if (!padronLocal[p.ci]) {
-        DB.ref(`padron/${p.ci}`).get().then(s => {
-          if (s.exists()) { padronLocal[p.ci]=s.val(); this.renderLista(); }
-        });
-      }
-    });
+    // Cargar datos del padrón para los CIs que no tenemos. BUG CORREGIDO:
+    // renderLista() se llama también en el primer render offline (con los
+    // datos guardados en localStorage), ANTES de conectar a Firebase -en
+    // ese momento DB todavía no existe. Sin este chequeo, esto tiraba un
+    // error sin capturar que cortaba en seco el resto del arranque (nunca
+    // se llegaba a conectar de verdad, ni con buena señal).
+    if (DB) {
+      personas.forEach(p => {
+        if (!padronLocal[p.ci]) {
+          DB.ref(`padron/${p.ci}`).get().then(s => {
+            if (s.exists()) { padronLocal[p.ci]=s.val(); this.renderLista(); }
+          });
+        }
+      });
+    }
   },
 
   // ── STATS ──
@@ -765,9 +766,7 @@ function guardarEstadosLocal(){
   //    incluido quedarse sin señal, lo que te dejaba afuera de tu propia
   //    brigada. Ahora la sesión solo se borra si vos hacés logout.
   try {
-    document.title = "STEP2_START";
     await initFB();
-    document.title = "STEP2_AFTER_INITFB";
     // Re-registrar la sesión: si el navegador dio un uid anónimo nuevo
     // (storage limpio, etc.) la sesión vieja ya no sirve para las reglas.
     await DB.ref(`sesiones/${AUTH.currentUser.uid}`).set({
@@ -778,7 +777,6 @@ function guardarEstadosLocal(){
     APP.listenEstados();
   } catch(e) {
     console.warn("Sin conexión al restaurar sesión, se muestran datos guardados:", e.message);
-    document.title = "DEBUGERR: " + e.message + " || " + (e.stack||"").replace(/\s+/g," ").slice(0,300);
   }
 })();
 
