@@ -558,6 +558,8 @@ const APP = {
       ? esc(`${pad.apellido||pad.ape||""}, ${pad.nombre||pad.nom||""}`)
       : `CI ${formatCI(ci)}`;
 
+    // Fotos viejas (de antes de sacar el requisito de foto): se siguen
+    // mostrando si ya existen en el registro, pero no se piden más.
     const fotos = est?.fotos_brigada
       ? `<div class="foto-thumb-grid">${Object.values(est.fotos_brigada).map(f=>
           `<img src="${esc(f.foto)}" class="foto-thumb">`
@@ -578,19 +580,14 @@ const APP = {
           ↩ Deshacer confirmación
         </button>`;
     } else {
-      // Pendiente — mostrar formulario
+      // Pendiente — la foto se sacó del flujo: la mesa marcando "votó" ya es
+      // la verificación, pedir además una foto era redundante y solo ocupaba
+      // espacio (cada foto son varios KB guardados en la base de datos).
       contenido = `
         ${fotos}
-        <label class="foto-zone" for="foto-inp-${esc(ci)}">
-          <input type="file" id="foto-inp-${esc(ci)}" accept="image/*" capture="environment"
-                 onchange="APP.previewFoto(this,'${escJs(ci)}')"/>
-          <div class="icon">📷</div>
-          <p>Tocar para fotografiar la mesa</p>
-        </label>
-        <img id="foto-prev-${esc(ci)}" class="foto-preview"/>
         <button class="btn btn-green" id="btn-confirmar-${esc(ci)}"
           onclick="APP.confirmarVoto('${escJs(ci)}')">
-          ✅ Confirmar que votó + subir foto
+          ✅ Confirmar que votó
         </button>`;
     }
 
@@ -629,104 +626,57 @@ const APP = {
     document.getElementById("modal").classList.add("hidden");
   },
 
-  previewFoto(input, ci) {
-    const file = input.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = e => {
-      const img = document.getElementById("foto-prev-"+ci);
-      if (img) { img.src=e.target.result; img.style.display="block"; }
-    };
-    reader.readAsDataURL(file);
-  },
-
   // ── CONFIRMAR VOTO ──
+  // BUG DE DISEÑO CORREGIDO: antes esto exigía sacar una foto de la mesa
+  // como "prueba" antes de dejar confirmar. Es redundante -la mesa ya
+  // marca "votó" por su cuenta, esa es la verificación real- y cada foto
+  // ocupaba varios KB en la base de datos por nada. Se saca el paso de
+  // la foto del todo; confirmar ahora es inmediato.
   async confirmarVoto(ci) {
-    const btn  = document.getElementById("btn-confirmar-"+ci);
-    const file = document.getElementById("foto-inp-"+ci)?.files[0];
-
-    if (!file) {
-      alert("📷 Necesitás sacar una foto de la mesa antes de confirmar.");
-      return;
-    }
-
+    const btn = document.getElementById("btn-confirmar-"+ci);
     btn.disabled=true;
-    btn.textContent="⏳ Comprimiendo foto...";
+    btn.textContent="⏳ Registrando...";
+
+    const tsNow = firebase.database.ServerValue.TIMESTAMP;
+
+    const updates = {};
+    updates[`estados/${ci}/atendido_brigada`]     = true;
+    updates[`estados/${ci}/atendido_brigada_por`] = miNombre;
+    updates[`estados/${ci}/timestamp_brigada`]    = tsNow;
+    updates[`estados/${ci}/brigada_codigo`]       = miCodigo;
+    updates[`estados/${ci}/confirmado`]           = true;
+    updates[`estados/${ci}/confirmado_por`]       = miNombre;
+    updates[`estados/${ci}/confirmado_rol`]       = "brigada";
+    updates[`estados/${ci}/confirmado_ts`]        = tsNow;
+
+    // Historial
+    const histEntry = { ci, accion:"Brigada confirmó voto", color: estadosLocal[ci]?.color||"",
+      usuario: miNombre, rol:"brigada", ts: tsNow };
 
     try {
-      const canvas = document.createElement("canvas");
-      const img    = document.createElement("img");
-      const reader = new FileReader();
-
-      const fotoBase64 = await new Promise((res, rej) => {
-        reader.onload = e => {
-          img.onload = () => {
-            const MAX = 480;
-            let w = img.width, h = img.height;
-            if (w > MAX) { h = h*(MAX/w); w = MAX; }
-            if (h > MAX) { w = w*(MAX/h); h = MAX; }
-            canvas.width=w; canvas.height=h;
-            canvas.getContext("2d").drawImage(img,0,0,w,h);
-            res(canvas.toDataURL("image/jpeg", 0.5));
-          };
-          img.onerror = () => rej(new Error("No se pudo procesar la imagen"));
-          img.src = e.target.result;
-        };
-        reader.onerror = () => rej(new Error("No se pudo leer el archivo"));
-        reader.readAsDataURL(file);
-      });
-
-      btn.textContent="⏳ Registrando...";
-
-      const tsNow = firebase.database.ServerValue.TIMESTAMP;
-      const tsLocal = Date.now(); // para la clave del nodo de foto (necesita ser un número)
-
-      const updates = {};
-      updates[`estados/${ci}/atendido_brigada`]          = true;
-      updates[`estados/${ci}/atendido_brigada_por`]      = miNombre;
-      updates[`estados/${ci}/timestamp_brigada`]         = tsNow;
-      updates[`estados/${ci}/brigada_codigo`]            = miCodigo;
-      updates[`estados/${ci}/fotos_brigada/${tsLocal}`]  = { foto: fotoBase64, por: miNombre, ts: tsNow };
-      updates[`estados/${ci}/confirmado`]                = true;
-      updates[`estados/${ci}/confirmado_por`]            = miNombre;
-      updates[`estados/${ci}/confirmado_rol`]            = "brigada";
-      updates[`estados/${ci}/confirmado_ts`]             = tsNow;
-
-      // Historial
-      const histEntry = { ci, accion:"Brigada confirmó voto", color: estadosLocal[ci]?.color||"",
-        usuario: miNombre, rol:"brigada", ts: tsNow };
-
-      try {
-        await DB.ref().update(updates);
-        await DB.ref(`historial/${ci}`).push(histEntry);
-      } catch(e) {
-        // Modo offline: guardar en localStorage para sincronizar al reconectar
-        if (e.message?.includes("network") || !navigator.onLine) {
-          const cola = JSON.parse(localStorage.getItem("brigada_pending")||"[]");
-          cola.push({ updates, histEntry, tsLocal });
-          localStorage.setItem("brigada_pending", JSON.stringify(cola));
-          // Actualizar estado local para que se vea confirmado en la lista
-          estadosLocal[ci] = { ...estadosLocal[ci], atendido_brigada:true,
-            atendido_brigada_por:miNombre, confirmado:true,
-            confirmado_por:miNombre, confirmado_rol:"brigada" };
-          guardarEstadosLocal();
-          APP.renderLista();
-          APP.updateStats();
-          this.cerrarModal();
-          alert("📴 Sin conexión — la confirmación se guardó localmente y se enviará al reconectar.");
-          return;
-        }
-        throw e;
-      }
-
+      await DB.ref().update(updates);
+      await DB.ref(`historial/${ci}`).push(histEntry);
       this.cerrarModal();
-
     } catch(e) {
-      let msg = e.message || "Error desconocido";
-      if (msg.includes("network") || msg.includes("offline")) msg = "Error de red. La confirmación se guardó localmente.";
-      alert("❌ " + msg);
+      // Modo offline: guardar en localStorage para sincronizar al reconectar
+      if (e.message?.includes("network") || !navigator.onLine) {
+        const cola = JSON.parse(localStorage.getItem("brigada_pending")||"[]");
+        cola.push({ updates, histEntry });
+        localStorage.setItem("brigada_pending", JSON.stringify(cola));
+        // Actualizar estado local para que se vea confirmado en la lista
+        estadosLocal[ci] = { ...estadosLocal[ci], atendido_brigada:true,
+          atendido_brigada_por:miNombre, confirmado:true,
+          confirmado_por:miNombre, confirmado_rol:"brigada" };
+        guardarEstadosLocal();
+        APP.renderLista();
+        APP.updateStats();
+        this.cerrarModal();
+        alert("📴 Sin conexión — la confirmación se guardó localmente y se enviará al reconectar.");
+        return;
+      }
+      alert("❌ " + (e.message||"Error desconocido"));
       btn.disabled=false;
-      btn.textContent="✅ Confirmar que votó + subir foto";
+      btn.textContent="✅ Confirmar que votó";
     }
   },
 
