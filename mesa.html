@@ -109,6 +109,7 @@ button,input,textarea{font-family:var(--font)}
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;
   display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(4px)}
 .modal-overlay.hidden{display:none}
+.hidden{display:none !important}
 .modal-sheet{background:var(--surface);border-radius:16px 16px 0 0;width:100%;
   max-height:90vh;overflow-y:auto;box-shadow:0 -4px 32px rgba(0,0,0,.4);
   animation:slideUp .25s ease}
@@ -171,6 +172,9 @@ button,input,textarea{font-family:var(--font)}
 
 <!-- APP -->
 <div id="screen-app">
+  <div id="offline-banner" class="hidden" style="background:#7c2d12;color:#fff;text-align:center;font-size:12px;padding:6px;font-weight:700">
+    📴 Sin conexión — se muestra la última información guardada y las marcas se sincronizan al reconectar
+  </div>
   <div class="topbar">
     <div class="tb-color" id="tb-color" style="background:#0f766e"></div>
     <div class="tb-title" id="tb-title">Mesa</div>
@@ -357,8 +361,12 @@ const APP = {
         nombre, timestamp: Date.now(), mesa: miMesa
       });
 
-      // Guardar en sessionStorage
-      sessionStorage.setItem("mesa", JSON.stringify({miMesa, miNombre, miCodigo}));
+      // Guardar sesión y padrón de la mesa en localStorage (no sessionStorage:
+      // localStorage sobrevive a que el navegador/app se cierre del todo sin
+      // señal y se vuelva a abrir más tarde -es lo que permite abrir la app
+      // sin conexión y seguir viendo la última info conocida).
+      guardarSesionLocal();
+      guardarPadronLocal();
 
       this.setupUI();
       this.listenEstados();
@@ -373,7 +381,10 @@ const APP = {
 
   logout() {
     if (!confirm("¿Cerrar sesión?")) return;
-    sessionStorage.removeItem("mesa");
+    localStorage.removeItem("mesa");
+    localStorage.removeItem("mesa_padron");
+    localStorage.removeItem("mesa_estados");
+    localStorage.removeItem("mesa_pending");
     document.getElementById("screen-app").style.display="none";
     document.getElementById("screen-login").style.display="flex";
     document.getElementById("li-nombre").value="";
@@ -397,8 +408,33 @@ const APP = {
   listenEstados() {
     DB.ref("estados").on("value", snap => {
       estadosLocal = snap.exists() ? snap.val() : {};
+      guardarEstadosLocal();
       this.renderLista();
       this.updateStats();
+    });
+
+    // Monitor de conectividad — banner "sin conexión" + sincroniza las
+    // marcas hechas offline apenas vuelve la señal.
+    DB.ref(".info/connected").on("value", async snap => {
+      const online = snap.val() === true;
+      const banner = document.getElementById("offline-banner");
+      if (banner) banner.classList.toggle("hidden", online);
+
+      if (online) {
+        const cola = JSON.parse(localStorage.getItem("mesa_pending")||"[]");
+        if (cola.length > 0) {
+          localStorage.removeItem("mesa_pending");
+          let ok = 0;
+          for (const item of cola) {
+            try {
+              await DB.ref().update(item.updates);
+              if (item.histEntry) await DB.ref(`historial/${item.ci}`).push(item.histEntry).catch(()=>{});
+              ok++;
+            } catch(e) { console.warn("Flush offline error:", e); }
+          }
+          if (ok > 0) alert(`✅ ${ok} marca(s) offline sincronizada(s) con el servidor.`);
+        }
+      }
     });
   },
 
@@ -570,19 +606,39 @@ const APP = {
     const btn = document.getElementById("btn-confirmar-"+ci);
     btn.disabled=true;
     btn.textContent="⏳ Registrando...";
+
+    // No usamos firebase.database.ServerValue.TIMESTAMP acá: si termina
+    // guardado en la cola offline y se manda mucho más tarde, igual queremos
+    // el momento real en que la persona votó, no el momento en que hubo señal.
+    const ts = Date.now();
+    const updates = {};
+    updates[`estados/${ci}/votado_mesa`]     = true;
+    updates[`estados/${ci}/votado_mesa_por`] = miNombre;
+    updates[`estados/${ci}/votado_mesa_ts`]  = ts;
+    updates[`estados/${ci}/mesa_codigo`]     = miCodigo;
+    const histEntry = { ci, accion:"Mesa confirmó voto", mesa:miMesa,
+      usuario:miNombre, rol:"mesa", ts };
+
     try {
-      const updates = {};
-      updates[`estados/${ci}/votado_mesa`]     = true;
-      updates[`estados/${ci}/votado_mesa_por`] = miNombre;
-      updates[`estados/${ci}/votado_mesa_ts`]  = firebase.database.ServerValue.TIMESTAMP;
-      updates[`estados/${ci}/mesa_codigo`]     = miCodigo;
-      // Historial
-      const histEntry = { ci, accion:"Mesa confirmó voto", mesa:miMesa,
-        usuario:miNombre, rol:"mesa", ts: firebase.database.ServerValue.TIMESTAMP };
       await DB.ref().update(updates);
       await DB.ref(`historial/${ci}`).push(histEntry).catch(()=>{});
       this.cerrarModal();
     } catch(e) {
+      // Modo offline: guardar en localStorage para sincronizar al reconectar
+      if (e.message?.includes("network") || !navigator.onLine) {
+        const cola = JSON.parse(localStorage.getItem("mesa_pending")||"[]");
+        cola.push({ ci, updates, histEntry });
+        localStorage.setItem("mesa_pending", JSON.stringify(cola));
+        // Reflejar la marca en la pantalla ya mismo, sin esperar al servidor
+        estadosLocal[ci] = { ...estadosLocal[ci], votado_mesa:true,
+          votado_mesa_por:miNombre, votado_mesa_ts:ts, mesa_codigo:miCodigo };
+        guardarEstadosLocal();
+        APP.renderLista();
+        APP.updateStats();
+        this.cerrarModal();
+        alert("📴 Sin conexión — la marca se guardó localmente y se enviará al reconectar.");
+        return;
+      }
       alert("❌ " + (e.message||"Error desconocido"));
       btn.disabled=false;
       btn.textContent="✅ Marcar que votó";
@@ -604,25 +660,56 @@ document.getElementById("modal").addEventListener("click", e => {
   if (e.target.id==="modal") APP.cerrarModal();
 });
 
+// ══════════════════════
+// CACHÉ LOCAL (para poder abrir la app sin señal)
+// ══════════════════════
+function guardarSesionLocal(){
+  localStorage.setItem("mesa", JSON.stringify({miMesa, miNombre, miCodigo}));
+}
+function guardarPadronLocal(){
+  try { localStorage.setItem("mesa_padron", JSON.stringify(padronLocal)); } catch(e) {}
+}
+function guardarEstadosLocal(){
+  try { localStorage.setItem("mesa_estados", JSON.stringify(estadosLocal)); } catch(e) {}
+}
+
 // Restaurar sesión
 (async function(){
-  const saved = sessionStorage.getItem("mesa");
-  if (saved) {
-    try {
-      const d = JSON.parse(saved);
-      miMesa=d.miMesa; miNombre=d.miNombre; miCodigo=d.miCodigo;
-      await initFB();
-      // Re-registrar la sesión: si el navegador dio un uid anónimo nuevo
-      // (storage limpio, etc.) la sesión vieja ya no sirve para las reglas.
-      await DB.ref(`sesiones/${AUTH.currentUser.uid}`).set({
-        tipo: "mesa", codigo: miCodigo, mesa: miMesa, ts: Date.now()
-      });
-      // Volver a precargar el padrón de la mesa (no se guarda en sessionStorage por tamaño)
-      const idxSnap = await DB.ref(`mesa_index/${miMesa}`).get();
-      padronLocal = idxSnap.exists() ? idxSnap.val() : {};
-      APP.setupUI();
-      APP.listenEstados();
-    } catch(e) { sessionStorage.removeItem("mesa"); }
+  const saved = localStorage.getItem("mesa");
+  if (!saved) return;
+
+  const d = JSON.parse(saved);
+  miMesa=d.miMesa; miNombre=d.miNombre; miCodigo=d.miCodigo;
+
+  // 1) Mostrar YA lo último que se vio guardado, sin esperar a la red.
+  //    Así, si no hay señal, la app igual abre y muestra la mesa completa
+  //    con el último estado conocido (en vez de una pantalla en blanco).
+  try { padronLocal = JSON.parse(localStorage.getItem("mesa_padron")||"{}"); } catch(e) { padronLocal={}; }
+  try { estadosLocal = JSON.parse(localStorage.getItem("mesa_estados")||"{}"); } catch(e) { estadosLocal={}; }
+  APP.setupUI();
+  APP.renderLista();
+  APP.updateStats();
+  const banner = document.getElementById("offline-banner");
+  if (banner && !navigator.onLine) banner.classList.remove("hidden");
+
+  // 2) Intentar conectar de verdad. Si no hay señal esto va a fallar -eso
+  //    está bien, la sesión NO se borra por un simple error de red (antes
+  //    sí se borraba, lo que te dejaba afuera de tu propia mesa si abrías
+  //    la app justo sin señal). Solo mostramos los datos ya cargados y el
+  //    listener de conectividad se encarga de refrescar todo apenas vuelva.
+  try {
+    await initFB();
+    // Re-registrar la sesión: si el navegador dio un uid anónimo nuevo
+    // (storage limpio, etc.) la sesión vieja ya no sirve para las reglas.
+    await DB.ref(`sesiones/${AUTH.currentUser.uid}`).set({
+      tipo: "mesa", codigo: miCodigo, mesa: miMesa, ts: Date.now()
+    });
+    // Refrescar el padrón de la mesa por si el admin cambió algo
+    const idxSnap = await DB.ref(`mesa_index/${miMesa}`).get();
+    if (idxSnap.exists()) { padronLocal = idxSnap.val(); guardarPadronLocal(); APP.renderLista(); }
+    APP.listenEstados();
+  } catch(e) {
+    console.warn("Sin conexión al restaurar sesión, se muestran datos guardados:", e.message);
   }
 })();
 
@@ -633,6 +720,12 @@ document.getElementById("li-codigo").addEventListener("input", function(){
 document.getElementById("li-pass-code")?.addEventListener("keydown", e=>{
   if(e.key==="Enter") APP.login();
 });
+
+// Service Worker: solo para esta página (scope limitado a mesa.html), para
+// que abra sin señal. NO se registra en admin-codigos.html ni index-bypass-v2.html.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw-offline.js", { scope: "./mesa.html" }).catch(()=>{});
+}
 </script>
 </body>
 </html>

@@ -109,6 +109,7 @@ button,input,textarea{font-family:var(--font)}
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;
   display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(4px)}
 .modal-overlay.hidden{display:none}
+.hidden{display:none !important}
 .modal-sheet{background:var(--surface);border-radius:16px 16px 0 0;width:100%;
   max-height:90vh;overflow-y:auto;box-shadow:0 -4px 32px rgba(0,0,0,.4);
   animation:slideUp .25s ease}
@@ -356,8 +357,10 @@ const APP = {
         nombre, timestamp: Date.now(), color: miColor
       });
 
-      // Guardar en sessionStorage
-      sessionStorage.setItem("brigada", JSON.stringify({miColor, miNombre, miCodigo}));
+      // Guardar en localStorage (no sessionStorage: localStorage sobrevive
+      // a que el navegador/app se cierre del todo sin señal y se vuelva a
+      // abrir más tarde -es lo que permite abrir la app sin conexión).
+      guardarSesionLocal();
 
       this.setupUI();
       this.listenEstados();
@@ -372,7 +375,10 @@ const APP = {
 
   logout() {
     if (!confirm("¿Cerrar sesión?")) return;
-    sessionStorage.removeItem("brigada");
+    localStorage.removeItem("brigada");
+    localStorage.removeItem("brigada_estados");
+    localStorage.removeItem("brigada_padron");
+    localStorage.removeItem("brigada_pending");
     document.getElementById("screen-app").style.display="none";
     document.getElementById("screen-login").style.display="flex";
     document.getElementById("li-nombre").value="";
@@ -398,6 +404,7 @@ const APP = {
   listenEstados() {
     DB.ref("estados").on("value", snap => {
       estadosLocal = snap.exists() ? snap.val() : {};
+      guardarEstadosLocal();
       this.renderLista();
       this.updateStats();
     });
@@ -410,9 +417,9 @@ const APP = {
 
       if (online) {
         // Sincronizar confirmaciones pendientes offline
-        const cola = JSON.parse(sessionStorage.getItem("brigada_pending")||"[]");
+        const cola = JSON.parse(localStorage.getItem("brigada_pending")||"[]");
         if (cola.length > 0) {
-          sessionStorage.removeItem("brigada_pending");
+          localStorage.removeItem("brigada_pending");
           for (const item of cola) {
             try {
               await DB.ref().update(item.updates);
@@ -693,15 +700,16 @@ const APP = {
         await DB.ref().update(updates);
         await DB.ref(`historial/${ci}`).push(histEntry);
       } catch(e) {
-        // Modo offline: guardar en sessionStorage para sincronizar al reconectar
+        // Modo offline: guardar en localStorage para sincronizar al reconectar
         if (e.message?.includes("network") || !navigator.onLine) {
-          const cola = JSON.parse(sessionStorage.getItem("brigada_pending")||"[]");
+          const cola = JSON.parse(localStorage.getItem("brigada_pending")||"[]");
           cola.push({ updates, histEntry, tsLocal });
-          sessionStorage.setItem("brigada_pending", JSON.stringify(cola));
+          localStorage.setItem("brigada_pending", JSON.stringify(cola));
           // Actualizar estado local para que se vea confirmado en la lista
           estadosLocal[ci] = { ...estadosLocal[ci], atendido_brigada:true,
             atendido_brigada_por:miNombre, confirmado:true,
             confirmado_por:miNombre, confirmado_rol:"brigada" };
+          guardarEstadosLocal();
           APP.renderLista();
           APP.updateStats();
           this.cerrarModal();
@@ -740,22 +748,46 @@ document.getElementById("modal").addEventListener("click", e => {
   if (e.target.id==="modal") APP.cerrarModal();
 });
 
+// ══════════════════════
+// CACHÉ LOCAL (para poder abrir la app sin señal)
+// ══════════════════════
+function guardarSesionLocal(){
+  localStorage.setItem("brigada", JSON.stringify({miColor, miNombre, miCodigo}));
+}
+function guardarEstadosLocal(){
+  try { localStorage.setItem("brigada_estados", JSON.stringify(estadosLocal)); } catch(e) {}
+}
+
 // Restaurar sesión
 (async function(){
-  const saved = sessionStorage.getItem("brigada");
-  if (saved) {
-    try {
-      const d = JSON.parse(saved);
-      miColor=d.miColor; miNombre=d.miNombre; miCodigo=d.miCodigo;
-      await initFB();
-      // Re-registrar la sesión: si el navegador dio un uid anónimo nuevo
-      // (storage limpio, etc.) la sesión vieja ya no sirve para las reglas.
-      await DB.ref(`sesiones/${AUTH.currentUser.uid}`).set({
-        tipo: "brigada", codigo: miCodigo, color: miColor, ts: Date.now()
-      });
-      APP.setupUI();
-      APP.listenEstados();
-    } catch(e) { sessionStorage.removeItem("brigada"); }
+  const saved = localStorage.getItem("brigada");
+  if (!saved) return;
+
+  const d = JSON.parse(saved);
+  miColor=d.miColor; miNombre=d.miNombre; miCodigo=d.miCodigo;
+
+  // 1) Mostrar YA lo último que se vio guardado, sin esperar a la red.
+  try { estadosLocal = JSON.parse(localStorage.getItem("brigada_estados")||"{}"); } catch(e) { estadosLocal={}; }
+  APP.setupUI();
+  APP.renderLista();
+  APP.updateStats();
+  const banner = document.getElementById("offline-banner");
+  if (banner && !navigator.onLine) banner.classList.remove("hidden");
+
+  // 2) Intentar conectar de verdad. Si no hay señal esto falla y no pasa
+  //    nada -antes esto borraba la sesión guardada por cualquier error,
+  //    incluido quedarse sin señal, lo que te dejaba afuera de tu propia
+  //    brigada. Ahora la sesión solo se borra si vos hacés logout.
+  try {
+    await initFB();
+    // Re-registrar la sesión: si el navegador dio un uid anónimo nuevo
+    // (storage limpio, etc.) la sesión vieja ya no sirve para las reglas.
+    await DB.ref(`sesiones/${AUTH.currentUser.uid}`).set({
+      tipo: "brigada", codigo: miCodigo, color: miColor, ts: Date.now()
+    });
+    APP.listenEstados();
+  } catch(e) {
+    console.warn("Sin conexión al restaurar sesión, se muestran datos guardados:", e.message);
   }
 })();
 
@@ -766,6 +798,12 @@ document.getElementById("li-codigo").addEventListener("input", function(){
 document.getElementById("li-pass-code")?.addEventListener("keydown", e=>{
   if(e.key==="Enter") APP.login();
 });
+
+// Service Worker: solo para esta página (scope limitado a brigada.html), para
+// que abra sin señal. NO se registra en admin-codigos.html ni index-bypass-v2.html.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw-offline.js", { scope: "./brigada.html" }).catch(()=>{});
+}
 </script>
 </body>
 </html>
