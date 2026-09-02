@@ -95,6 +95,15 @@
       "$codigo": {
         "$acc": { ".write": "auth != null" }
       }
+    },
+    "grupos_config": {
+      ".read": "auth != null && (root.child('usuarios').child(auth.uid).exists() || root.child('sesiones').child(auth.uid).exists())",
+      ".write": "root.child('usuarios').child(auth.uid).child('esAdmin').val() === true",
+      "$color": {
+        ".validate": "$color.matches(/^(amarillo|azul|verde|rojo|naranja|violeta)$/)",
+        "label": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40" },
+        "$otros": { ".validate": false }
+      }
     }
   }
 }

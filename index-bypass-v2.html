@@ -817,11 +817,26 @@ const APP = {
       if (!cached) { toast("Sin conexión y sin datos de usuario.", "err"); return; }
       currentUD = cached;
     }
+    await this.aplicarNombresGrupos();
     this.setupUI();
     await this.loadPadron();
     this.listenEstados();
     document.getElementById("screen-login").classList.add("hidden");
     document.getElementById("screen-app").classList.remove("hidden");
+  },
+
+  // Nombres personalizados por grupo (se configuran en admin-codigos.html,
+  // ej. dejar el grupo en amarillo pero mostrar "Concejal Rodríguez" en vez
+  // de "Amarillo"). El color en sí -la clave interna, los permisos- no
+  // cambia, solo el texto que se ve en toda esta app.
+  async aplicarNombresGrupos() {
+    try {
+      const snap = await FB_DB.ref("grupos_config").get();
+      const config = snap.exists() ? snap.val() : {};
+      for (const k in GRUPOS) {
+        if (config[k]?.label) GRUPOS[k].label = config[k].label;
+      }
+    } catch(e) { /* si falla, se quedan los nombres de fábrica */ }
   },
 
   // ─── SETUP UI ───

@@ -279,6 +279,20 @@ let queryActual = "";
 // ══════════════════════
 // INIT FIREBASE
 // ══════════════════════
+// Nombres personalizados por grupo (el admin los pone en admin-codigos.html,
+// ej. dejar el grupo en amarillo pero mostrar "Concejal Rodríguez" en vez de
+// "Amarillo"). El color en sí -la clave interna, los permisos- no cambia,
+// solo el texto que se ve.
+async function aplicarNombresGrupos() {
+  try {
+    const snap = await DB.ref("grupos_config").get();
+    const config = snap.exists() ? snap.val() : {};
+    for (const k in GRUPOS) {
+      if (config[k]?.label) GRUPOS[k].label = config[k].label;
+    }
+  } catch(e) { /* si falla, se quedan los nombres de fábrica */ }
+}
+
 async function initFB() {
   if (!firebase.apps.length) firebase.initializeApp(FB_CONFIG);
   DB      = firebase.database();
@@ -362,6 +376,7 @@ const APP = {
       // abrir más tarde -es lo que permite abrir la app sin conexión).
       guardarSesionLocal();
 
+      await aplicarNombresGrupos();
       this.setupUI();
       this.listenEstados();
 
@@ -750,6 +765,8 @@ function guardarEstadosLocal(){
     await DB.ref(`sesiones/${AUTH.currentUser.uid}`).set({
       tipo: "brigada", codigo: miCodigo, color: miColor, ts: Date.now()
     });
+    await aplicarNombresGrupos();
+    APP.setupUI(); // por si el nombre del grupo cambió desde la última vez
     APP.listenEstados();
   } catch(e) {
     console.warn("Sin conexión al restaurar sesión, se muestran datos guardados:", e.message);

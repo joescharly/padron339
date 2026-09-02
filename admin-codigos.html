@@ -101,6 +101,19 @@ p.sub{font-size:13px;color:#7a84a0;margin-bottom:16px;line-height:1.6}
   </div>
 
   <div class="card">
+    <h2>🏷️ Nombres de los grupos</h2>
+    <p style="font-size:13px;color:#7a84a0;margin-bottom:10px">
+      El color de cada grupo (el que ven mesa/brigada/operador para saber a quién
+      pertenece cada marca) no se puede cambiar, pero el <strong>nombre que se
+      muestra</strong> sí -por ejemplo, dejar el grupo en amarillo pero mostrar
+      "Concejal Rodríguez" en vez de "Amarillo" en toda la app.
+    </p>
+    <div id="nombres-grupos-list"></div>
+    <button class="btn btn-green" onclick="ADMIN.guardarNombresGrupos()">✅ Guardar nombres</button>
+    <div class="log" id="nombres-grupos-log">Esperando...</div>
+  </div>
+
+  <div class="card">
     <h2>➕ Generar nuevo código</h2>
     <div class="grid2">
       <div class="field">
@@ -225,6 +238,10 @@ const GRUPOS = {
   naranja: {label:"Naranja", bg:"#d9620a",tx:"#ffffff"},
   violeta: {label:"Violeta", bg:"#7c3aed",tx:"#ffffff"},
 };
+// Copia congelada de los nombres de fábrica -GRUPOS.label se pisa con el
+// nombre personalizado que ponga el admin (ver cargarNombresGrupos), y esta
+// copia es la que se usa como placeholder/valor "por defecto" en el form.
+const GRUPOS_DEFAULT = JSON.parse(JSON.stringify(GRUPOS));
 
 let DB, AUTH;
 let mesasDetectadas = []; // [{mesa, cantidad}]
@@ -270,9 +287,52 @@ const ADMIN = {
       this.cargarAccesos();
       this.cargarCodigosMesa();
       this.cargarAccesosMesa();
+      await this.cargarNombresGrupos();
     }catch(e){
       st.textContent="❌ "+e.message;
       st.style.color="#e05555";
+    }
+  },
+
+  // ═══════ NOMBRES DE LOS GRUPOS (el color no cambia, solo cómo se muestra) ═══════
+
+  async cargarNombresGrupos(){
+    const snap = await DB.ref("grupos_config").get();
+    const config = snap.exists() ? snap.val() : {};
+
+    // Aplicar los nombres personalizados a GRUPOS en memoria, así el resto de
+    // esta misma página (lista de códigos, el <select> del generador) ya
+    // muestra el nombre nuevo sin tener que tocar nada más.
+    for (const k of Object.keys(GRUPOS)) {
+      GRUPOS[k].label = config[k]?.label || GRUPOS_DEFAULT[k].label;
+    }
+    document.querySelectorAll("#gen-color option").forEach(opt => {
+      const k = opt.value;
+      const emoji = opt.textContent.trim().split(" ")[0];
+      opt.textContent = `${emoji} ${GRUPOS[k].label}`;
+    });
+
+    const el = document.getElementById("nombres-grupos-list");
+    el.innerHTML = Object.entries(GRUPOS_DEFAULT).map(([k,v]) => `
+      <div class="field">
+        <label><span class="color-preview" style="background:${v.bg}"></span>${esc(v.label)} (color interno, no cambia)</label>
+        <input type="text" id="nombre-grupo-${esc(k)}" value="${esc(config[k]?.label||"")}"
+               placeholder="Ej: ${esc(v.label)} (dejar vacío para usar este nombre)"/>
+      </div>`).join("");
+  },
+
+  async guardarNombresGrupos(){
+    const updates = {};
+    for (const k of Object.keys(GRUPOS)) {
+      const val = document.getElementById("nombre-grupo-"+k).value.trim();
+      // Vacío = usar el nombre por defecto (se borra la personalización)
+      updates[`grupos_config/${k}/label`] = val || null;
+    }
+    try {
+      await DB.ref().update(updates);
+      log("nombres-grupos-log", "✅ Nombres guardados. Ya se ven en las 3 apps.");
+    } catch(e) {
+      log("nombres-grupos-log", "❌ "+e.message);
     }
   },
 
