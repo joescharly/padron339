@@ -765,7 +765,9 @@ function guardarEstadosLocal(){
   //    incluido quedarse sin señal, lo que te dejaba afuera de tu propia
   //    brigada. Ahora la sesión solo se borra si vos hacés logout.
   try {
+    document.title = "STEP2_START";
     await initFB();
+    document.title = "STEP2_AFTER_INITFB";
     // Re-registrar la sesión: si el navegador dio un uid anónimo nuevo
     // (storage limpio, etc.) la sesión vieja ya no sirve para las reglas.
     await DB.ref(`sesiones/${AUTH.currentUser.uid}`).set({
