@@ -853,7 +853,7 @@ const APP = {
     // Badge topbar
     const badge = document.getElementById("tb-badge");
     if (isAdmin) badge.innerHTML=`<span class="badge" style="background:#7c3aed;color:#fff">Admin</span>`;
-    else if (g)  badge.innerHTML=`<span class="badge" style="background:${g.bg};color:${g.tx}">${g.label}</span>`;
+    else if (g)  badge.innerHTML=`<span class="badge" style="background:${g.bg};color:${g.tx}">${esc(g.label)}</span>`;
 
     // Admin nav
     if (isAdmin) document.getElementById("nav-admin").style.display="";
@@ -1013,7 +1013,7 @@ const APP = {
       const g   = est ? grupoColor(est.color) : null;
       const bar = g ? `style="background:${g.bg}"` : "";
       const badge = g
-        ? `<span class="badge badge-sm" style="background:${g.bg};color:${g.tx}">${g.label}</span>`
+        ? `<span class="badge badge-sm" style="background:${g.bg};color:${g.tx}">${esc(g.label)}</span>`
         : `<span class="badge badge-libre badge-sm">Libre</span>`;
       const checkConfirmado = est?.confirmado
         ? `<span class="badge badge-sm" style="background:rgba(62,207,112,.18);color:var(--success);margin-left:4px">✅ Votó</span>`
@@ -1450,7 +1450,7 @@ const APP = {
             return `<div style="margin-bottom:8px">
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
                 <span style="width:10px;height:10px;border-radius:50%;background:${v.bg};flex-shrink:0;display:inline-block"></span>
-                <span style="font-size:13px;flex:1">${v.label}</span>
+                <span style="font-size:13px;flex:1">${esc(v.label)}</span>
                 <span style="font-size:12px;color:var(--muted)">${n} marcados · <span style="color:var(--success)">${nc} votaron (${pc}%)</span></span>
                 ${nombres.length>0?`<button class="btn-sm" style="padding:2px 8px;font-size:10px" onclick="APP.toggleColorNames('op_${k}')">ver</button>`:""}
               </div>
@@ -1774,7 +1774,7 @@ María Ruiz, maria@gmail.com, , admin"></textarea></div>
       try {
         const uid = await crearCuentaOperador(email, pass);
         await FB_DB.ref(`usuarios/${uid}`).set({ nombre, grupo, esAdmin, email });
-        log.innerHTML += `<div style="color:var(--success)">✅ ${esc(nombre)} → ${esAdmin?"Admin":(GRUPOS[grupo]?.label||"sin grupo")}</div>`;
+        log.innerHTML += `<div style="color:var(--success)">✅ ${esc(nombre)} → ${esAdmin?"Admin":esc(GRUPOS[grupo]?.label||"sin grupo")}</div>`;
         ok++;
       } catch(e) {
         const detalle = `${e.code ? "["+e.code+"] " : ""}${e.message}`;
