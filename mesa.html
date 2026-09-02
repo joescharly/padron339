@@ -669,8 +669,22 @@ function guardarSesionLocal(){
 function guardarPadronLocal(){
   try { localStorage.setItem("mesa_padron", JSON.stringify(padronLocal)); } catch(e) {}
 }
+// "estados" es un árbol compartido por las 3 apps, y trae las fotos de
+// brigada en base64 (varios KB cada una) aunque mesa.html no las use.
+// Guardar eso tal cual en localStorage en cada actualización puede superar
+// rápido el límite del navegador (~5-10MB) con el correr del día -y ahí la
+// caché offline dejaría de actualizarse en silencio. Para la vista offline
+// no hacen falta las fotos, así que se sacan antes de guardar.
+function sinFotos(estados){
+  const copia = {};
+  for (const ci in estados) {
+    const { fotos_brigada, fotos, ...resto } = estados[ci];
+    copia[ci] = resto;
+  }
+  return copia;
+}
 function guardarEstadosLocal(){
-  try { localStorage.setItem("mesa_estados", JSON.stringify(estadosLocal)); } catch(e) {}
+  try { localStorage.setItem("mesa_estados", JSON.stringify(sinFotos(estadosLocal))); } catch(e) {}
 }
 
 // Restaurar sesión
